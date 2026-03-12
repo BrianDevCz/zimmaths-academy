@@ -1,98 +1,205 @@
+"use client";
+import { useState, useEffect } from "react";
+
+function TypewriterText() {
+  const phrases = [
+    "Past papers explained step by step.",
+    "AI tutor available 24/7.",
+    "Daily challenges to keep you sharp.",
+    "All 15 ZIMSEC topics covered.",
+    "For less than the price of a textbook.",
+  ];
+
+  const [currentPhrase, setCurrentPhrase] = useState(0);
+  const [currentText, setCurrentText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const phrase = phrases[currentPhrase];
+    let timer: ReturnType<typeof setTimeout>;
+
+    if (!isDeleting && currentText.length < phrase.length) {
+      timer = setTimeout(() => {
+        setCurrentText(phrase.slice(0, currentText.length + 1));
+      }, 50);
+    } else if (!isDeleting && currentText.length === phrase.length) {
+      timer = setTimeout(() => setIsDeleting(true), 2000);
+    } else if (isDeleting && currentText.length > 0) {
+      timer = setTimeout(() => {
+        setCurrentText(phrase.slice(0, currentText.length - 1));
+      }, 30);
+    } else if (isDeleting && currentText.length === 0) {
+      setIsDeleting(false);
+      setCurrentPhrase((prev) => (prev + 1) % phrases.length);
+    }
+
+    return () => clearTimeout(timer);
+  }, [currentText, isDeleting, currentPhrase]);
+
+  return (
+    <span>
+      {currentText}
+      <span className="animate-pulse">|</span>
+    </span>
+  );
+}
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-white">
-
-      {/* Navigation */}
-      <nav className="bg-green-800 text-white px-6 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">ZimMaths Academy</h1>
-        <div className="flex gap-4">
-          <a href="#" className="hover:text-green-300">Login</a>
-          <a href="#" className="bg-green-500 hover:bg-green-400 px-4 py-2 rounded-lg font-semibold">Get Started</a>
-        </div>
-      </nav>
+    <main>
 
       {/* Hero Section */}
-      <section className="bg-green-800 text-white py-20 px-6 text-center">
-        <h2 className="text-5xl font-bold mb-4">Pass ZIMSEC Maths.</h2>
-        <h2 className="text-5xl font-bold mb-6 text-green-300">Build Your Future.</h2>
-        <p className="text-xl mb-8 text-green-100 max-w-2xl mx-auto">
-          Zimbabwe's first interactive O-Level Mathematics platform. 
-          Past papers explained step by step. AI tutor. Daily challenges. 
-          All for less than the price of a textbook.
-        </p>
-        <div className="flex gap-4 justify-center flex-wrap">
-          <a href="#" className="bg-white text-green-800 hover:bg-green-100 px-8 py-4 rounded-lg font-bold text-lg">
-            Start Learning Free
-          </a>
-          <a href="#" className="border-2 border-white hover:bg-green-700 px-8 py-4 rounded-lg font-bold text-lg">
-            See Past Papers
-          </a>
+      <section className="bg-brand-800 text-white pt-6 pb-24 px-6 text-center">
+        <div className="max-w-4xl mx-auto">
+          <span className="bg-brand-600 text-brand-100 text-lg font-semibold px-6 py-3 rounded-full mb-6 inline-block mt-0">
+            🎓 Built specifically for ZIMSEC O-Level Students
+          </span>
+          <h1 className="text-5xl font-bold mb-4 mt-4">Pass ZIMSEC Maths.</h1>
+          <h1 className="text-5xl font-bold mb-6 text-brand-300">Build Your Future.</h1>
+          <p className="text-xl mb-10 text-brand-100 max-w-2xl mx-auto leading-relaxed min-h-[60px]">
+            <TypewriterText />
+          </p>
+          <div className="flex gap-4 justify-center flex-wrap">
+            <a href="/register" className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+              Start Learning Free
+            </a>
+            <a href="/papers" className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
+              Browse Past Papers
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Bar */}
+      <section className="bg-brand-900 text-white py-6 px-6">
+        <div className="max-w-4xl mx-auto flex flex-wrap justify-center gap-12 text-center">
+          <div>
+            <p className="text-3xl font-bold text-brand-300">50+</p>
+            <p className="text-brand-200 text-sm">Past Papers</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-brand-300">15</p>
+            <p className="text-brand-200 text-sm">ZIMSEC Topics</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-brand-300">400+</p>
+            <p className="text-brand-200 text-sm">Solved Questions</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-brand-300">24/7</p>
+            <p className="text-brand-200 text-sm">AI Tutor</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Everything You Need To Pass</h2>
+          <p className="text-center text-gray-500 mb-12 text-lg">One platform. All the tools. Designed for ZIMSEC.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">📄</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">Past Papers Library</h3>
+              <p className="text-gray-600">Every ZIMSEC O-Level Maths paper from 2010 to 2024 with full step-by-step solutions.</p>
+            </div>
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">📚</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">15 Topic Lessons</h3>
+              <p className="text-gray-600">All ZIMSEC syllabus topics covered with clear explanations, worked examples and practice questions.</p>
+            </div>
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">🤖</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">AI Maths Tutor</h3>
+              <p className="text-gray-600">Ask anything. Get instant step-by-step help from an AI tutor trained on ZIMSEC mathematics.</p>
+            </div>
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">✏️</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">Smart Practice Mode</h3>
+              <p className="text-gray-600">Generate instant practice tests by topic and difficulty. Auto-marked with full explanations.</p>
+            </div>
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">🏆</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">Daily Challenges</h3>
+              <p className="text-gray-600">A new maths challenge every day. Compete with students across Zimbabwe. Share on WhatsApp.</p>
+            </div>
+
+            <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
+              <div className="text-4xl mb-4">📊</div>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">Performance Dashboard</h3>
+              <p className="text-gray-600">Track your progress across all 15 topics. See your weak areas. Focus your revision.</p>
+            </div>
+
+          </div>
         </div>
       </section>
 
       {/* Pricing Section */}
-      <section className="py-16 px-6 bg-gray-50">
-        <h3 className="text-3xl font-bold text-center text-green-800 mb-4">Affordable For Every Student</h3>
-        <p className="text-center text-gray-600 mb-12">Less than the price of a bus fare. No excuses.</p>
-        <div className="flex gap-6 justify-center flex-wrap">
+      <section className="py-20 px-6 bg-brand-50">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Affordable For Every Student</h2>
+          <p className="text-center text-gray-500 mb-12 text-lg">Less than the price of a bus fare. No excuses.</p>
+          <div className="flex gap-6 justify-center flex-wrap">
 
-          {/* Free Plan */}
-          <div className="bg-white rounded-2xl shadow p-8 w-72 border border-gray-200">
-            <h4 className="text-xl font-bold text-gray-800 mb-2">Free</h4>
-            <p className="text-4xl font-bold text-green-800 mb-6">$0</p>
-            <ul className="text-gray-600 space-y-2 mb-8">
-              <li>✅ 5 past exam papers</li>
-              <li>✅ Daily maths challenge</li>
-              <li>✅ Basic topic notes</li>
-              <li>✅ 5 AI tutor questions/day</li>
-            </ul>
-            <a href="#" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold">
-              Get Started
-            </a>
-          </div>
-
-          {/* 2 Weeks Plan */}
-          <div className="bg-white rounded-2xl shadow p-8 w-72 border border-gray-200">
-            <h4 className="text-xl font-bold text-gray-800 mb-2">2 Weeks</h4>
-            <p className="text-4xl font-bold text-green-800 mb-6">$3</p>
-            <ul className="text-gray-600 space-y-2 mb-8">
-              <li>✅ All 50+ past papers</li>
-              <li>✅ Full step-by-step solutions</li>
-              <li>✅ Unlimited practice tests</li>
-              <li>✅ Unlimited AI tutor</li>
-            </ul>
-            <a href="#" className="block text-center bg-green-700 hover:bg-green-600 text-white py-3 rounded-lg font-semibold">
-              Unlock for $3
-            </a>
-          </div>
-
-          {/* Annual Plan */}
-          <div className="bg-green-800 rounded-2xl shadow p-8 w-72 border border-green-700 relative">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full">
-              BEST VALUE
+            {/* Free */}
+            <div className="bg-white rounded-2xl shadow p-8 w-72 border border-gray-200">
+              <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
+              <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
+              <p className="text-gray-400 text-sm mb-6">Forever free</p>
+              <ul className="text-gray-600 space-y-2 mb-8 text-sm">
+                <li>✅ 5 past exam papers</li>
+                <li>✅ Daily maths challenge</li>
+                <li>✅ Basic topic notes</li>
+                <li>✅ 5 AI questions/day</li>
+              </ul>
+              <a href="/register" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold transition">
+                Get Started Free
+              </a>
             </div>
-            <h4 className="text-xl font-bold text-white mb-2">1 Year</h4>
-            <p className="text-4xl font-bold text-green-300 mb-6">$45</p>
-            <ul className="text-green-100 space-y-2 mb-8">
-              <li>✅ Everything in Premium</li>
-              <li>✅ Performance dashboard</li>
-              <li>✅ Exam predictions</li>
-              <li>✅ Offline access</li>
-            </ul>
-            <a href="#" className="block text-center bg-white hover:bg-green-100 text-green-800 py-3 rounded-lg font-semibold">
-              Unlock for $45
-            </a>
-          </div>
 
+            {/* 2 Weeks */}
+            <div className="bg-white rounded-2xl shadow p-8 w-72 border border-brand-200">
+              <h4 className="text-xl font-bold text-gray-800 mb-1">2 Weeks</h4>
+              <p className="text-4xl font-bold text-brand-800 mb-1">$3</p>
+              <p className="text-gray-400 text-sm mb-6">Perfect for exam season</p>
+              <ul className="text-gray-600 space-y-2 mb-8 text-sm">
+                <li>✅ All 50+ past papers</li>
+                <li>✅ Full solutions</li>
+                <li>✅ Unlimited practice</li>
+                <li>✅ Unlimited AI tutor</li>
+              </ul>
+              <a href="/register" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
+                Unlock for $3
+              </a>
+            </div>
+
+            {/* Annual */}
+            <div className="bg-brand-800 rounded-2xl shadow p-8 w-72 border border-brand-700 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
+                ⭐ BEST VALUE
+              </div>
+              <h4 className="text-xl font-bold text-white mb-1">1 Year</h4>
+              <p className="text-4xl font-bold text-brand-300 mb-1">$45</p>
+              <p className="text-brand-300 text-sm mb-6">Full year access</p>
+              <ul className="text-brand-100 space-y-2 mb-8 text-sm">
+                <li>✅ Everything in Premium</li>
+                <li>✅ Performance dashboard</li>
+                <li>✅ Exam predictions</li>
+                <li>✅ Offline access</li>
+              </ul>
+              <a href="/register" className="block text-center bg-white hover:bg-brand-50 text-brand-800 py-3 rounded-lg font-semibold transition">
+                Unlock for $45
+              </a>
+            </div>
+
+          </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-green-900 text-green-200 text-center py-8 px-6">
-        <p className="text-xl font-bold text-white mb-2">ZimMaths Academy</p>
-        <p className="mb-4">Zimbabwe's O-Level Mathematics Study Portal</p>
-        <p className="text-sm text-green-400">© 2025 ZimMaths Academy · zimmaths.com</p>
-      </footer>
 
     </main>
   );
