@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  grade         String?
+  school        String?
+  avatarColour  String    @default("#1976D2")
+  streakCount   Int       @default(0)
+  lastActive    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  subscription          Subscription?
+  practiceTests         PracticeTest[]
+  dailyChallengeAttempts DailyChallengeAttempt[]
+  points                UserPoint[]
+  badges                UserBadge[]
+  bookmarks             Bookmark[]
+  lessonProgress        UserLessonProgress[]
+  aiChatUsage           AiChatUsage[]
+}
+
+model Subscription {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  plan             String
+  status           String   @default("active")
+  startedAt        DateTime @default(now())
+  expiresAt        DateTime
+  paymentReference String?
+  amountUsd        Float
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Topic {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  syllabusPoints  Json?
+  orderIndex      Int
+  icon            String?
+  tier            Int      @default(1)
+
+  lessons   Lesson[]
+  questions Question[]
+}
+
+model Paper {
+  id               String   @id @default(uuid())
+  year             Int
+  session          String
+  paperNumber      Int
+  title            String
+  pdfUrl           String?
+  difficultyOverall String  @default("medium")
+  isFree           Boolean  @default(false)
+  totalMarks       Int?
+  questionCount    Int?
+  createdAt        DateTime @default(now())
+
+  questions Question[]
+}
+
+model Question {
+  id                  String   @id @default(uuid())
+  paperId             String
+  questionNumber      Int
+  questionText        String
+  questionImageUrl    String?
+  marks               Int
+  difficulty          String   @default("medium")
+  topicId             String
+  subtopic            String?
+  solutionText        String?
+  solutionSteps       Json?
+  videoUrl            String?
+  isFree              Boolean  @default(false)
+  isDailyEligible     Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  paper             Paper              @relation(fields: [paperId], references: [id])
+  topic             Topic              @relation(fields: [topicId], references: [id])
+  dailyChallenges   DailyChallenge[]
+  bookmarks         Bookmark[]
+}
+
+model Lesson {
+  id               String   @id @default(uuid())
+  topicId          String
+  title            String
+  content          String
+  orderIndex       Int
+  isFree           Boolean  @default(false)
+  estimatedMinutes Int      @default(10)
+  publishedAt      DateTime @default(now())
+
+  topic    Topic                @relation(fields: [topicId], references: [id])
+  progress UserLessonProgress[]
+}
+
+model PracticeTest {
+  id               String   @id @default(uuid())
+  userId           String
+  topicId          String?
+  difficulty       String   @default("mixed")
+  questionCount    Int
+  scorePercentage  Float
+  timeTakenSeconds Int?
+  completedAt      DateTime @default(now())
+  questionsData    Json?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model DailyChallenge {
+  id              String   @id @default(uuid())
+  questionId      String
+  date            DateTime @unique
+  totalAttempts   Int      @default(0)
+  correctAttempts Int      @default(0)
+
+  question  Question               @relation(fields: [questionId], references: [id])
+  attempts  DailyChallengeAttempt[]
+}
+
+model DailyChallengeAttempt {
+  id               String   @id @default(uuid())
+  userId           String
+  dailyChallengeId String
+  userAnswer       String?
+  isCorrect        Boolean  @default(false)
+  attemptedAt      DateTime @default(now())
+  pointsAwarded    Int      @default(0)
+
+  user           User           @relation(fields: [userId], references: [id])
+  dailyChallenge DailyChallenge @relation(fields: [dailyChallengeId], references: [id])
+}
+
+model UserPoint {
+  id          String   @id @default(uuid())
+  userId      String
+  points      Int
+  source      String
+  sourceId    String?
+  awardedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String
+  badgeSlug  String
+  awardedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Bookmark {
+  id         String   @id @default(uuid())
+  userId     String
+  questionId String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+}
+
+model UserLessonProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  lessonId    String
+  completedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+}
+
+model AiChatUsage {
+  id           String   @id @default(uuid())
+  userId       String
+  date         DateTime
+  messageCount Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
