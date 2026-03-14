@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import topicsRouter from './routes/topics';
 import authRouter from './routes/auth';
+import papersRouter from './routes/papers';
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 // Routes
 app.use('/api/topics', topicsRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/papers', papersRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

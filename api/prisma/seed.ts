@@ -31,6 +31,135 @@ async function main() {
     });
     console.log(`✅ Topic created: ${topic.name}`);
   }
+// Seed sample papers
+  console.log('📄 Seeding sample papers...');
+
+  const topic_algebra = await prisma.topic.findUnique({ where: { slug: 'algebra' } });
+  const topic_arithmetic = await prisma.topic.findUnique({ where: { slug: 'general-arithmetic' } });
+  const topic_trig = await prisma.topic.findUnique({ where: { slug: 'trigonometry' } });
+  const topic_stats = await prisma.topic.findUnique({ where: { slug: 'statistics' } });
+
+  if (topic_algebra && topic_arithmetic && topic_trig && topic_stats) {
+
+    const paper1 = await prisma.paper.upsert({
+      where: { id: 'paper-nov-2022-p1' },
+      update: {},
+      create: {
+        id: 'paper-nov-2022-p1',
+        year: 2022,
+        session: 'november',
+        paperNumber: 1,
+        title: 'ZIMSEC O-Level Mathematics November 2022 Paper 1',
+        isFree: true,
+        totalMarks: 80,
+        questionCount: 30,
+        difficultyOverall: 'medium',
+      }
+    });
+
+    await prisma.question.createMany({
+      data: [
+        {
+          paperId: paper1.id,
+          questionNumber: 1,
+          questionText: 'Evaluate 3² + 4² and write your answer in standard form.',
+          marks: 2,
+          difficulty: 'easy',
+          topicId: topic_arithmetic.id,
+          subtopic: 'Squares and standard form',
+          solutionText: '3² = 9, 4² = 16. Sum = 25 = 2.5 × 10¹',
+          isFree: true,
+          isDailyEligible: true,
+        },
+        {
+          paperId: paper1.id,
+          questionNumber: 2,
+          questionText: 'Factorise completely: 3x² - 12x',
+          marks: 2,
+          difficulty: 'easy',
+          topicId: topic_algebra.id,
+          subtopic: 'Factorisation',
+          solutionText: '3x² - 12x = 3x(x - 4)',
+          isFree: true,
+          isDailyEligible: true,
+        },
+        {
+          paperId: paper1.id,
+          questionNumber: 3,
+          questionText: 'Solve the simultaneous equations: 2x + y = 7 and x - y = 2',
+          marks: 3,
+          difficulty: 'medium',
+          topicId: topic_algebra.id,
+          subtopic: 'Simultaneous equations',
+          solutionText: 'Add equations: 3x = 9, x = 3. Substitute: y = 1.',
+          isFree: false,
+          isDailyEligible: true,
+        },
+        {
+          paperId: paper1.id,
+          questionNumber: 4,
+          questionText: 'The angle of elevation of the top of a building from a point 50m away is 32°. Calculate the height.',
+          marks: 3,
+          difficulty: 'medium',
+          topicId: topic_trig.id,
+          subtopic: 'Angles of elevation',
+          solutionText: 'tan(32°) = height/50. Height = 50 × 0.6249 = 31.25m',
+          isFree: false,
+          isDailyEligible: true,
+        },
+        {
+          paperId: paper1.id,
+          questionNumber: 5,
+          questionText: 'The mean of 5 numbers is 12. Four of the numbers are 8, 15, 10 and 14. Find the fifth number.',
+          marks: 2,
+          difficulty: 'easy',
+          topicId: topic_stats.id,
+          subtopic: 'Mean',
+          solutionText: 'Total = 60. Sum of known = 47. Fifth = 60 - 47 = 13.',
+          isFree: true,
+          isDailyEligible: true,
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    console.log('✅ Paper 1 (Nov 2022) seeded with 5 questions');
+
+    await prisma.paper.upsert({
+      where: { id: 'paper-jun-2022-p1' },
+      update: {},
+      create: {
+        id: 'paper-jun-2022-p1',
+        year: 2022,
+        session: 'june',
+        paperNumber: 1,
+        title: 'ZIMSEC O-Level Mathematics June 2022 Paper 1',
+        isFree: false,
+        totalMarks: 80,
+        questionCount: 28,
+        difficultyOverall: 'hard',
+      }
+    });
+    console.log('✅ Paper 2 (Jun 2022) seeded');
+
+    await prisma.paper.upsert({
+      where: { id: 'paper-nov-2021-p1' },
+      update: {},
+      create: {
+        id: 'paper-nov-2021-p1',
+        year: 2021,
+        session: 'november',
+        paperNumber: 1,
+        title: 'ZIMSEC O-Level Mathematics November 2021 Paper 1',
+        isFree: false,
+        totalMarks: 80,
+        questionCount: 30,
+        difficultyOverall: 'medium',
+      }
+    });
+    console.log('✅ Paper 3 (Nov 2021) seeded');
+
+  }
 
   console.log('🎉 Database seeded successfully!');
 }

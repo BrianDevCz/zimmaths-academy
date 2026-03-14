@@ -1,0 +1,77 @@
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const router = Router();
+const prisma = new PrismaClient();
+
+// GET all papers
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const { year, session, paper, topic, difficulty } = req.query;
+
+    const where: any = {};
+
+    if (year) where.year = parseInt(year as string);
+    if (session) where.session = session;
+    if (paper) where.paperNumber = parseInt(paper as string);
+    if (difficulty) where.difficultyOverall = difficulty;
+
+    const papers = await prisma.paper.findMany({
+      where,
+      orderBy: [{ year: 'desc' }, { session: 'asc' }],
+      include: {
+        _count: { select: { questions: true } }
+      }
+    });
+
+    res.json({
+      success: true,
+      count: papers.length,
+      data: papers
+    });
+
+  } catch (error) {
+    console.error('Papers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch papers'
+    });
+  }
+});
+
+// GET single paper with questions
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const paper = await prisma.paper.findUnique({
+      where: { id: String(req.params.id) },
+      include: {
+        questions: {
+          orderBy: { questionNumber: 'asc' },
+          include: {
+            topic: { select: { name: true, slug: true, icon: true } }
+          }
+        }
+      }
+    });
+
+    if (!paper) {
+      return res.status(404).json({
+        success: false,
+        message: 'Paper not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: paper
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch paper'
+    });
+  }
+});
+
+export default router;
