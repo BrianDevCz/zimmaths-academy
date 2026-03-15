@@ -46,6 +46,7 @@ export default function Navbar() {
         <a href="/papers" className="hover:text-brand-300 font-medium transition">Papers</a>
         <a href="/topics" className="hover:text-brand-300 font-medium transition">Topics</a>
         <a href="/practice" className="hover:text-brand-300 font-medium transition">Practice</a>
+        <a href="/daily" className="hover:text-brand-300 font-medium transition">Daily Challenge</a>
         <a href="/leaderboard" className="hover:text-brand-300 font-medium transition">Leaderboard</a>
       </div>
 
