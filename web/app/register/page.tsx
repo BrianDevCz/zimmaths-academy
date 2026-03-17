@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -53,12 +55,10 @@ export default function RegisterPage() {
 
       const data = await res.json();
 
-      if (data.success) {
-        // Save token to localStorage
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        // Redirect to home
+     if (data.success) {
+         login(data.token, data.user);
         router.push("/");
+
       } else {
         setError(data.message || "Registration failed");
       }

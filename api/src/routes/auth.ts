@@ -1,33 +1,44 @@
-import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { Router, Request, Response } from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { z } from "zod";
+import { PrismaClient } from "@prisma/client";
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// REGISTER
-router.post('/register', async (req: Request, res: Response) => {
-  try {
-    const { name, email, password, grade } = req.body;
+// Validation schemas
+const registerSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  grade: z.enum(["form3", "form4"]),
+});
 
-    // Validate fields
-    if (!name || !email || !password) {
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+// POST /api/auth/register
+router.post("/register", async (req: Request, res: Response) => {
+  try {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        message: 'Name, email and password are required'
+        error: parsed.error.issues[0].message,
       });
     }
 
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
+    const { name, email, password, grade } = parsed.data;
 
-    if (existingUser) {
+    // Check if email already exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
       return res.status(400).json({
         success: false,
-        message: 'An account with this email already exists'
+        error: "An account with this email already exists",
       });
     }
 
@@ -40,150 +51,161 @@ router.post('/register', async (req: Request, res: Response) => {
         name,
         email,
         passwordHash,
-        grade: grade || null,
-      }
+        grade,
+        avatarColour: getAvatarColour(name),
+      },
     });
 
-    // Generate JWT token
+    // Generate JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '7d' }
+      process.env.JWT_SECRET as string,
+      { expiresIn: "7d" }
     );
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Account created successfully!',
+      message: "Account created successfully",
       token,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         grade: user.grade,
-      }
+        avatarColour: user.avatarColour,
+      },
     });
-
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({
+    console.error("Register error:", error);
+    return res.status(500).json({
       success: false,
-      message: 'Something went wrong. Please try again.'
+      error: "Something went wrong. Please try again.",
     });
   }
 });
 
-// LOGIN
-router.post('/login', async (req: Request, res: Response) => {
+// POST /api/auth/login
+router.post("/login", async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-
-    // Validate fields
-    if (!email || !password) {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        error: parsed.error.issues[0].message,
       });
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
+    const { email, password } = parsed.data;
 
+    // Find user
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        error: "Invalid email or password",
       });
     }
 
     // Check password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-
-    if (!isValidPassword) {
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        error: "Invalid email or password",
       });
     }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '7d' }
-    );
 
     // Update last active
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastActive: new Date() }
+      data: { lastActive: new Date() },
     });
 
-    res.json({
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "7d" }
+    );
+
+    return res.status(200).json({
       success: true,
-      message: 'Login successful!',
+      message: "Login successful",
       token,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         grade: user.grade,
-      }
+        avatarColour: user.avatarColour,
+      },
     });
-
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
+    console.error("Login error:", error);
+    return res.status(500).json({
       success: false,
-      message: 'Something went wrong. Please try again.'
+      error: "Something went wrong. Please try again.",
     });
   }
 });
 
-// GET current user (protected)
-router.get('/me', async (req: Request, res: Response) => {
+// GET /api/auth/me
+router.get("/me", async (req: Request, res: Response) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        message: 'No token provided'
+        error: "No token provided",
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as { userId: string };
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        grade: true,
+        avatarColour: true,
+        createdAt: true,
+        lastActive: true,
+      },
     });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        error: "User not found",
       });
     }
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        grade: user.grade,
-        streakCount: user.streakCount,
-        createdAt: user.createdAt,
-      }
+      user,
     });
-
   } catch (error) {
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
-      message: 'Invalid token'
+      error: "Invalid or expired token",
     });
   }
 });
+
+// Helper — generate avatar colour from name
+function getAvatarColour(name: string): string {
+  const colours = [
+    "#1565C0", "#2E7D32", "#6A1B9A",
+    "#AD1457", "#E65100", "#00695C",
+  ];
+  const index = name.charCodeAt(0) % colours.length;
+  return colours[index];
+}
 
 export default router;

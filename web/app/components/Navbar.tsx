@@ -1,24 +1,17 @@
 "use client";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("user");
-    if (stored) {
-      setUser(JSON.parse(stored));
-    }
-  }, []);
-
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setUser(null);
+    logout();
+    setMenuOpen(false);
     router.push("/");
   };
 
@@ -48,12 +41,12 @@ export default function Navbar() {
         <a href="/practice" className="hover:text-brand-300 font-medium transition">Practice</a>
         <a href="/daily" className="hover:text-brand-300 font-medium transition">Daily Challenge</a>
         <a href="/leaderboard" className="hover:text-brand-300 font-medium transition">Leaderboard</a>
+        <a href="/ai-tutor" className="hover:text-brand-300 font-medium transition">AI Tutor</a>
       </div>
 
       {/* Auth Section */}
       <div className="flex items-center gap-3">
         {user ? (
-          // Logged in state
           <div className="flex items-center gap-3">
             <div className="relative">
               <button
@@ -61,10 +54,13 @@ export default function Navbar() {
                 className="flex items-center gap-2 bg-brand-700 hover:bg-brand-600 px-4 py-2 rounded-lg transition"
               >
                 {/* Avatar */}
-                <div className="w-8 h-8 rounded-full bg-brand-400 flex items-center justify-center font-bold text-sm">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white"
+                  style={{ backgroundColor: user.avatarColour || "#1565C0" }}
+                >
                   {user.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="font-medium">{user.name.split(' ')[0]}</span>
+                <span className="font-medium">{user.name.split(" ")[0]}</span>
                 <span className="text-brand-300 text-xs">▼</span>
               </button>
 
@@ -95,7 +91,6 @@ export default function Navbar() {
             </div>
           </div>
         ) : (
-          // Logged out state
           <>
             <a href="/login" className="hover:text-brand-300 font-medium transition">Login</a>
             <a href="/register" className="bg-brand-500 hover:bg-brand-400 px-5 py-2 rounded-lg font-semibold transition shadow">

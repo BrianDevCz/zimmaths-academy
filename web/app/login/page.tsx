@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -38,11 +40,12 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        router.push("/");
-      } else {
-        setError(data.message || "Login failed");
+          login(data.token, data.user);
+          router.push("/");
+  } 
+
+else {
+        setError(data.error || "Login failed. Please try again.");
       }
     } catch (err) {
       setError("Cannot connect to server. Please try again.");
@@ -51,12 +54,20 @@ export default function LoginPage() {
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSubmit();
+  };
+
   return (
     <main className="min-h-screen bg-brand-50 flex flex-col">
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="bg-white rounded-2xl shadow p-8 w-full max-w-md border border-gray-200">
 
+          {/* Header */}
           <div className="text-center mb-8">
+            <div className="w-14 h-14 bg-brand-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-white text-2xl font-bold">Z</span>
+            </div>
             <h1 className="text-3xl font-bold text-brand-800 mb-2">Welcome Back</h1>
             <p className="text-gray-500">Log in to continue studying</p>
           </div>
@@ -69,32 +80,41 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-5">
+
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Email Address
+              </label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                onKeyDown={handleKeyPress}
                 placeholder="you@email.com"
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Password
+              </label>
               <input
                 type="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
+                onKeyDown={handleKeyPress}
                 placeholder="Enter your password"
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
             <div className="flex justify-end">
-              <a href="#" className="text-sm text-brand-700 hover:text-brand-600">Forgot password?</a>
+              <a href="#" className="text-sm text-brand-700 hover:text-brand-600">
+                Forgot password?
+              </a>
             </div>
 
             <button
@@ -105,23 +125,13 @@ export default function LoginPage() {
               {loading ? "Logging in..." : "Log In"}
             </button>
 
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-white px-4 text-gray-400">or</span>
-              </div>
-            </div>
-
-            <button className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 py-3 rounded-lg font-semibold flex items-center justify-center gap-3 transition">
-              <span>🔵</span> Continue with Google
-            </button>
           </div>
 
           <p className="text-center text-gray-500 text-sm mt-6">
             Don't have an account?{" "}
-            <a href="/register" className="text-brand-700 font-semibold hover:text-brand-600">Register free</a>
+            <a href="/register" className="text-brand-700 font-semibold hover:text-brand-600">
+              Register free
+            </a>
           </p>
 
         </div>

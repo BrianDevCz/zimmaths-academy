@@ -74,4 +74,28 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET single question
+router.get('/questions/:questionId', async (req: Request, res: Response) => {
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const question = await prisma.question.findUnique({
+      where: { id: String(req.params.questionId) },
+      include: {
+        topic: { select: { name: true, slug: true, icon: true } },
+        paper: { select: { title: true, year: true, session: true } }
+      }
+    });
+
+    if (!question) {
+      return res.status(404).json({ success: false, message: 'Question not found' });
+    }
+
+    res.json({ success: true, data: question });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch question' });
+  }
+});
+
 export default router;
