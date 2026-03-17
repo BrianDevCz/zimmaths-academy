@@ -49,7 +49,12 @@ export default function AITutorPage() {
 
   const fetchSuggestions = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/ai/suggestions");
+      const token = localStorage.getItem("zim_token");
+const res = await fetch("http://localhost:5000/api/ai/suggestions", {
+  headers: {
+    "Authorization": `Bearer ${token}`,
+  },
+});
       const data = await res.json();
       if (data.success) setSuggestions(data.data);
     } catch (err) {
@@ -79,15 +84,18 @@ export default function AITutorPage() {
     setLoading(true);
 
     try {
+      const token = localStorage.getItem("zim_token");
       const res = await fetch("http://localhost:5000/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: messages.slice(-6),
-        }),
-      });
-
+    method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    message: text,
+    history: messages.slice(-6),
+  }),
+});
       const data = await res.json();
 
       if (data.success) {
