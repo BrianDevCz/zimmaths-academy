@@ -186,27 +186,37 @@ export default function PracticeTestPage() {
                 </div>
                 <p className="text-gray-800 mb-3">{result.questionText}</p>
                 <div className="space-y-1 text-sm">
-                  <p className="text-gray-600">
-                    Your answer:{" "}
-                    <span
-                      className={
-                        result.isCorrect
-                          ? "text-green-600 font-medium"
-                          : "text-red-600 font-medium"
-                      }
-                    >
-                      {result.userAnswer || "No answer given"}
-                    </span>
-                  </p>
-                  {!result.isCorrect && result.correctAnswer && (
-                    <p className="text-gray-600">
-                      Correct answer:{" "}
-                      <span className="text-green-600 font-medium">
-                        {result.correctAnswer}
-                      </span>
-                    </p>
-                  )}
-                </div>
+  <p className="text-gray-600">
+    Your answer:{" "}
+    <span
+      className={
+        result.isCorrect
+          ? "text-green-600 font-medium"
+          : "text-red-600 font-medium"
+      }
+    >
+      {result.userAnswer || "No answer given"}
+    </span>
+  </p>
+  {!result.isCorrect && result.correctAnswer && (
+    <p className="text-gray-600">
+      Correct answer:{" "}
+      <span className="text-green-600 font-medium">
+        {result.correctAnswer}
+      </span>
+    </p>
+  )}
+  {result.confidence === "approximate" && (
+    <p className="text-blue-600 text-xs mt-1">
+      ✓ Accepted within rounding tolerance
+    </p>
+  )}
+  {result.feedback && !result.isCorrect && (
+    <p className="text-gray-500 text-xs mt-1 italic">
+      {result.feedback}
+    </p>
+  )}
+</div>
               </div>
             ))}
           </div>

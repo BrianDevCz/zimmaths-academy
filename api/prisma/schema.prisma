@@ -86,6 +86,7 @@ model Question {
   subtopic         String?
   solutionText     String?
   solutionSteps    Json?
+  correctAnswer    String?
   videoUrl         String?
   isFree           Boolean  @default(false)
   isDailyEligible  Boolean  @default(false)

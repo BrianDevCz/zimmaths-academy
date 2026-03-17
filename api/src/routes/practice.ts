@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth";
 import { awardPoints } from "../points";
+import { markAnswer } from "../marking";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -78,27 +79,35 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
       include: { topic: { select: { name: true, slug: true } } },
     });
 
-    // Mark each answer
-    const results = answers.map((answer: any) => {
-      const question = questions.find((q) => q.id === answer.questionId);
-      if (!question) return null;
+    // Mark each answer using smart marking engine
+const results = answers.map((answer: any) => {
+  const question = questions.find((q) => q.id === answer.questionId);
+  if (!question) return null;
 
-      const correctAnswer = (question.solutionText || "").toLowerCase().trim();
-      const userAnswer = (answer.userAnswer || "").toLowerCase().trim();
-      const isCorrect = userAnswer === correctAnswer && userAnswer !== "";
+  // Use correctAnswer field if available, fall back to solutionText
+  const correctAnswer = (question as any).correctAnswer || question.solutionText || "";
+  const solutionText = question.solutionText || "";
 
-      return {
-        questionId: question.id,
-        questionText: question.questionText,
-        userAnswer: answer.userAnswer,
-        correctAnswer: question.solutionText,
-        solutionSteps: question.solutionSteps,
-        isCorrect,
-        marks: question.marks,
-        topic: question.topic?.name,
-        difficulty: question.difficulty,
-      };
-    }).filter(Boolean);
+  const marking = markAnswer(
+    answer.userAnswer || "",
+    correctAnswer,
+    solutionText
+  );
+
+  return {
+    questionId: question.id,
+    questionText: question.questionText,
+    userAnswer: answer.userAnswer,
+    correctAnswer,
+    solutionSteps: question.solutionSteps,
+    isCorrect: marking.isCorrect,
+    confidence: marking.confidence,
+    feedback: marking.feedback,
+    marks: question.marks,
+    topic: question.topic?.name,
+    difficulty: question.difficulty,
+  };
+}).filter(Boolean);
 
     const totalQuestions = results.length;
     const correctCount = results.filter((r: any) => r.isCorrect).length;
