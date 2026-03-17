@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../context/AuthContext";
 
 const topics = [
   { slug: "mixed", name: "Mixed — All Topics", icon: "🎯" },
@@ -23,6 +24,7 @@ const topics = [
 
 export default function PracticePage() {
   const router = useRouter();
+  const { token } = useAuth();
   const [selectedTopic, setSelectedTopic] = useState("mixed");
   const [difficulty, setDifficulty] = useState("mixed");
   const [count, setCount] = useState("5");
@@ -36,7 +38,10 @@ export default function PracticePage() {
     try {
       const res = await fetch("http://localhost:5000/api/practice/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({
           topicSlug: selectedTopic,
           difficulty,
@@ -47,7 +52,6 @@ export default function PracticePage() {
       const data = await res.json();
 
       if (data.success) {
-        // Save questions to sessionStorage
         sessionStorage.setItem("practiceQuestions", JSON.stringify(data.data));
         sessionStorage.setItem("practiceSettings", JSON.stringify({
           topic: selectedTopic,
@@ -56,7 +60,7 @@ export default function PracticePage() {
         }));
         router.push("/practice/test");
       } else {
-        setError(data.message || "Failed to generate test");
+        setError(data.error || "Failed to generate test. Try different filters.");
       }
     } catch (err) {
       setError("Cannot connect to server. Please try again.");
@@ -86,7 +90,7 @@ export default function PracticePage() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-              {error}
+              ⚠️ {error}
             </div>
           )}
 
@@ -158,6 +162,19 @@ export default function PracticePage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Points Info */}
+          <div className="bg-brand-50 border border-brand-100 rounded-lg px-4 py-3 mb-6">
+            <p className="text-sm text-brand-700 font-medium">🏆 Points you can earn:</p>
+            <div className="flex gap-4 mt-1 text-xs text-brand-600">
+              <span>5 questions = 10 pts</span>
+              <span>10 questions = 25 pts</span>
+              <span>20 questions = 55 pts</span>
+            </div>
+            <p className="text-xs text-brand-600 mt-1">
+              Score 80%+ for bonus points!
+            </p>
           </div>
 
           {/* Start Button */}

@@ -10,6 +10,7 @@ import dailyRouter from './routes/daily';
 import aiRouter from './routes/ai';
 import dashboardRouter from './routes/dashboard';
 import rateLimit from "express-rate-limit";
+import leaderboardRouter from "./routes/leaderboard";
 
 dotenv.config();
 
@@ -62,6 +63,7 @@ app.use("/api/questions", requireAuth, questionsRouter);
 app.use("/api/practice", requireAuth, practiceRouter);
 app.use("/api/ai", aiLimiter, requireAuth, aiRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
+app.use("/api/leaderboard", requireAuth, leaderboardRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

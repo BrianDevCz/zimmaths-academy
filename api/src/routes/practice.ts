@@ -1,41 +1,37 @@
-import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Router, Response } from "express";
+import { PrismaClient } from "@prisma/client";
+import { AuthRequest } from "../middleware/auth";
+import { awardPoints } from "../points";
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// Generate a practice test
-router.post('/generate', async (req: Request, res: Response) => {
+// POST /api/practice/generate
+router.post("/generate", async (req: AuthRequest, res: Response) => {
   try {
     const { topicSlug, difficulty, count } = req.body;
-
     const where: any = {};
 
-    if (topicSlug && topicSlug !== 'mixed') {
-      const topic = await prisma.topic.findUnique({
-        where: { slug: topicSlug }
-      });
+    if (topicSlug && topicSlug !== "mixed") {
+      const topic = await prisma.topic.findUnique({ where: { slug: topicSlug } });
       if (topic) where.topicId = topic.id;
     }
 
-    if (difficulty && difficulty !== 'mixed') {
+    if (difficulty && difficulty !== "mixed") {
       where.difficulty = difficulty;
     }
 
-    const questionCount = parseInt(count) || 5;
+    const questionCount = Math.min(parseInt(count) || 5, 20);
 
-    // Get all matching questions
     const allQuestions = await prisma.question.findMany({
       where,
-      include: {
-        topic: { select: { name: true, slug: true } }
-      }
+      include: { topic: { select: { name: true, slug: true } } },
     });
 
     if (allQuestions.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No questions found for these settings. Try different filters.'
+        error: "No questions found for these settings. Try different filters.",
       });
     }
 
@@ -43,8 +39,8 @@ router.post('/generate', async (req: Request, res: Response) => {
     const shuffled = allQuestions.sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, Math.min(questionCount, allQuestions.length));
 
-    // Remove solution from questions (don't reveal answers during test)
-    const questions = selected.map(q => ({
+    // Never send solution data during the test
+    const questions = selected.map((q) => ({
       id: q.id,
       questionNumber: q.questionNumber,
       questionText: q.questionText,
@@ -53,56 +49,50 @@ router.post('/generate', async (req: Request, res: Response) => {
       topic: q.topic,
     }));
 
-    res.json({
-      success: true,
-      count: questions.length,
-      data: questions
-    });
-
+    return res.json({ success: true, count: questions.length, data: questions });
   } catch (error) {
-    console.error('Practice generate error:', error);
-    res.status(500).json({
+    console.error("Practice generate error:", error);
+    return res.status(500).json({
       success: false,
-      message: 'Failed to generate practice test'
+      error: "Failed to generate practice test.",
     });
   }
 });
 
-// Submit practice test answers
-router.post('/submit', async (req: Request, res: Response) => {
+// POST /api/practice/submit
+router.post("/submit", async (req: AuthRequest, res: Response) => {
   try {
     const { answers } = req.body;
-    // answers = [{ questionId, userAnswer }]
 
     if (!answers || answers.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No answers provided'
+        error: "No answers provided.",
       });
     }
 
-    // Get correct answers from database
     const questionIds = answers.map((a: any) => a.questionId);
+
     const questions = await prisma.question.findMany({
       where: { id: { in: questionIds } },
-      include: { topic: { select: { name: true } } }
+      include: { topic: { select: { name: true, slug: true } } },
     });
 
     // Mark each answer
     const results = answers.map((answer: any) => {
-      const question = questions.find(q => q.id === answer.questionId);
+      const question = questions.find((q) => q.id === answer.questionId);
       if (!question) return null;
 
-      // Simple text comparison for now
-      const correctAnswer = question.solutionText || '';
-      const isCorrect = answer.userAnswer?.toLowerCase().trim() ===
-        correctAnswer.toLowerCase().trim();
+      const correctAnswer = (question.solutionText || "").toLowerCase().trim();
+      const userAnswer = (answer.userAnswer || "").toLowerCase().trim();
+      const isCorrect = userAnswer === correctAnswer && userAnswer !== "";
 
       return {
         questionId: question.id,
         questionText: question.questionText,
         userAnswer: answer.userAnswer,
         correctAnswer: question.solutionText,
+        solutionSteps: question.solutionSteps,
         isCorrect,
         marks: question.marks,
         topic: question.topic?.name,
@@ -110,27 +100,61 @@ router.post('/submit', async (req: Request, res: Response) => {
       };
     }).filter(Boolean);
 
-    const totalMarks = results.reduce((sum: number, r: any) => sum + r.marks, 0);
-    const earnedMarks = results
-      .filter((r: any) => r.isCorrect)
-      .reduce((sum: number, r: any) => sum + r.marks, 0);
-    const scorePercentage = totalMarks > 0
-      ? Math.round((earnedMarks / totalMarks) * 100)
+    const totalQuestions = results.length;
+    const correctCount = results.filter((r: any) => r.isCorrect).length;
+    const scorePercentage = totalQuestions > 0
+      ? Math.round((correctCount / totalQuestions) * 100)
       : 0;
 
-    res.json({
-      success: true,
-      score: scorePercentage,
-      correct: results.filter((r: any) => r.isCorrect).length,
-      total: results.length,
-      results
-    });
+    // Award points if user is logged in
+    let pointsAwarded = 0;
+    if (req.userId) {
+      // Points for completing the test
+      if (totalQuestions >= 20) {
+        pointsAwarded += await awardPoints(req.userId, "practice_20q");
+      } else if (totalQuestions >= 10) {
+        pointsAwarded += await awardPoints(req.userId, "practice_10q");
+      } else {
+        pointsAwarded += await awardPoints(req.userId, "practice_5q");
+      }
 
+      // Bonus points for high scores
+      if (scorePercentage === 100) {
+        pointsAwarded += await awardPoints(req.userId, "practice_bonus_100");
+      } else if (scorePercentage >= 80) {
+        pointsAwarded += await awardPoints(req.userId, "practice_bonus_80");
+      }
+
+      // Save practice test result
+      await prisma.practiceTest.create({
+        data: {
+          userId: req.userId,
+          difficulty: req.body.difficulty || "mixed",
+          questionCount: totalQuestions,
+          scorePercentage,
+          timeTakenSeconds: req.body.timeTaken || 0,
+          questionsData: results as any,
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        results,
+        summary: {
+          totalQuestions,
+          correctCount,
+          scorePercentage,
+          pointsAwarded
+        }
+      }
+    });
   } catch (error) {
-    console.error('Practice submit error:', error);
-    res.status(500).json({
+    console.error("Practice submit error:", error);
+    return res.status(500).json({
       success: false,
-      message: 'Failed to submit answers'
+      error: "Failed to submit practice test.",
     });
   }
 });
