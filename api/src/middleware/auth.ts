@@ -107,4 +107,58 @@ export const requirePremium = async (
       error: "Invalid or expired session. Please log in again.",
     });
   }
+
+};
+
+export const requireAdmin = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required.",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as { userId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: "Account not found.",
+      });
+    }
+
+    if (user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Admin access required.",
+      });
+    }
+
+    req.userId = decoded.userId;
+    req.userEmail = user.email;
+
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: "Invalid or expired session.",
+    });
+  }
 };

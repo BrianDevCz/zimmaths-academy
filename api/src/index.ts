@@ -1,3 +1,5 @@
+import adminRouter from "./routes/admin";
+import { requireAdmin } from "./middleware/auth";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -60,6 +62,7 @@ app.use("/api/papers", papersRouter);
 app.use("/api/daily", dailyRouter);
 
 // Protected routes — login required
+app.use("/api/admin", requireAdmin, adminRouter);
 app.use("/api/questions", requireAuth, questionsRouter);
 app.use("/api/practice", requireAuth, practiceRouter);
 app.use("/api/ai", aiLimiter, requireAuth, aiRouter);

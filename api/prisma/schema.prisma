@@ -19,6 +19,7 @@ model User {
   streakCount  Int      @default(0)
   lastActive   DateTime @default(now())
   createdAt    DateTime @default(now())
+  role         String   @default("student")
 
   subscription           Subscription?
   practiceTests          PracticeTest[]
