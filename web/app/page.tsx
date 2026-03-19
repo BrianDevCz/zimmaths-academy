@@ -144,60 +144,81 @@ export default function Home() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Affordable For Every Student</h2>
           <p className="text-center text-gray-500 mb-12 text-lg">Less than the price of a bus fare. No excuses.</p>
-          <div className="flex gap-6 justify-center flex-wrap">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-            {/* Free */}
-            <div className="bg-white rounded-2xl shadow p-8 w-72 border border-gray-200">
-              <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
-              <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
-              <p className="text-gray-400 text-sm mb-6">Forever free</p>
-              <ul className="text-gray-600 space-y-2 mb-8 text-sm">
-                <li>✅ 5 past exam papers</li>
-                <li>✅ Daily maths challenge</li>
-                <li>✅ Basic topic notes</li>
-                <li>✅ 5 AI questions/day</li>
-              </ul>
-              <a href="/register" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold transition">
-                Get Started Free
-              </a>
-            </div>
+  {/* Free */}
+  <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 flex flex-col">
+    <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
+    <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
+    <p className="text-gray-400 text-sm mb-6">Forever free</p>
+    <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+      <li>✅ 5 past exam papers</li>
+      <li>✅ Daily maths challenge</li>
+      <li>✅ Basic topic notes</li>
+      <li>✅ 5 AI questions/day</li>
+    </ul>
+    <a href="/register" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold transition">
+      Get Started Free
+    </a>
+  </div>
 
-            {/* 2 Weeks */}
-            <div className="bg-white rounded-2xl shadow p-8 w-72 border border-brand-200">
-              <h4 className="text-xl font-bold text-gray-800 mb-1">2 Weeks</h4>
-              <p className="text-4xl font-bold text-brand-800 mb-1">$3</p>
-              <p className="text-gray-400 text-sm mb-6">Perfect for exam season</p>
-              <ul className="text-gray-600 space-y-2 mb-8 text-sm">
-                <li>✅ All 50+ past papers</li>
-                <li>✅ Full solutions</li>
-                <li>✅ Unlimited practice</li>
-                <li>✅ Unlimited AI tutor</li>
-              </ul>
-              <a href="/register" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
-                Unlock for $3
-              </a>
-            </div>
+  {/* 2 Weeks */}
+  <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 flex flex-col">
+    <h4 className="text-xl font-bold text-gray-800 mb-1">2 Weeks</h4>
+    <p className="text-4xl font-bold text-brand-800 mb-1">$3</p>
+    <p className="text-gray-400 text-sm mb-6">Perfect for exam season</p>
+    <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+      <li>✅ All 50+ past papers</li>
+      <li>✅ Full solutions</li>
+      <li>✅ Unlimited practice</li>
+      <li>✅ Unlimited AI tutor</li>
+    </ul>
+    <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
+      Unlock for $3
+    </a>
+  </div>
 
-            {/* Annual */}
-            <div className="bg-brand-800 rounded-2xl shadow p-8 w-72 border border-brand-700 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
-                ⭐ BEST VALUE
-              </div>
-              <h4 className="text-xl font-bold text-white mb-1">1 Year</h4>
-              <p className="text-4xl font-bold text-brand-300 mb-1">$45</p>
-              <p className="text-brand-300 text-sm mb-6">Full year access</p>
-              <ul className="text-brand-100 space-y-2 mb-8 text-sm">
-                <li>✅ Everything in Premium</li>
-                <li>✅ Performance dashboard</li>
-                <li>✅ Exam predictions</li>
-                <li>✅ Offline access</li>
-              </ul>
-              <a href="/register" className="block text-center bg-white hover:bg-brand-50 text-brand-800 py-3 rounded-lg font-semibold transition">
-                Unlock for $45
-              </a>
-            </div>
+  {/* Monthly */}
+  <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 relative flex flex-col">
+    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
+      POPULAR
+    </div>
+    <h4 className="text-xl font-bold text-gray-800 mb-1">1 Month</h4>
+    <p className="text-4xl font-bold text-brand-800 mb-1">$5</p>
+    <p className="text-gray-400 text-sm mb-6">Structured monthly prep</p>
+    <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+      <li>✅ All 50+ past papers</li>
+      <li>✅ Full solutions</li>
+      <li>✅ Unlimited practice</li>
+      <li>✅ Unlimited AI tutor</li>
+      <li>✅ Performance dashboard</li>
+      <li>✅ Progress tracking</li>
+    </ul>
+    <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
+      Unlock for $5
+    </a>
+  </div>
 
-          </div>
+  {/* Annual */}
+  <div className="bg-brand-800 rounded-2xl shadow p-8 border border-brand-700 relative flex flex-col">
+    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
+      ⭐ BEST VALUE
+    </div>
+    <h4 className="text-xl font-bold text-white mb-1">1 Year</h4>
+    <p className="text-4xl font-bold text-brand-300 mb-1">$45</p>
+    <p className="text-brand-300 text-sm mb-6">Full year access</p>
+    <ul className="text-brand-100 space-y-2 mb-8 text-sm flex-1">
+      <li>✅ Everything in Premium</li>
+      <li>✅ Performance dashboard</li>
+      <li>✅ Exam predictions</li>
+      <li>✅ Offline access</li>
+    </ul>
+    <a href="/upgrade" className="block text-center bg-white hover:bg-brand-50 text-brand-800 py-3 rounded-lg font-semibold transition">
+      Unlock for $45
+    </a>
+  </div>
+
+</div>
         </div>
       </section>
 
