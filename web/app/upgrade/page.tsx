@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 
@@ -51,18 +51,21 @@ const plans = [
 ];
 
 const paymentMethods = [
-  { id: "ecocash", label: "EcoCash", icon: "📱", colour: "bg-red-50 border-red-200 text-red-700" },
-  { id: "innbucks", label: "Innbucks", icon: "💳", colour: "bg-blue-50 border-blue-200 text-blue-700" },
-  { id: "omari", label: "Omari", icon: "💰", colour: "bg-green-50 border-green-200 text-green-700" },
+  { id: "ecocash", label: "EcoCash", icon: "📱" },
+  { id: "innbucks", label: "Innbucks", icon: "💳" },
+  { id: "omari", label: "Omari", icon: "💰" },
 ];
 
+const MAX_POLL_ATTEMPTS = 24;
+
 interface PaymentInfo {
-  success: boolean;
   paymentRef: string;
   plan: string;
   amount: number;
   paymentMethod: string;
   instructions: string;
+  pollUrl?: string;
+  redirectUrl?: string;
 }
 
 export default function UpgradePage() {
@@ -71,9 +74,65 @@ export default function UpgradePage() {
   const [selectedPlan, setSelectedPlan] = useState("monthly");
   const [selectedMethod, setSelectedMethod] = useState("ecocash");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
+  const [pollStatus, setPollStatus] = useState<"waiting" | "paid" | "timeout">("waiting");
+  const [pollCount, setPollCount] = useState(0);
+  const intervalRef = useRef<any>(null);
+
+  // Poll for payment confirmation every 5 seconds
+  useEffect(() => {
+    if (!paymentInfo || pollStatus === "paid") return;
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    intervalRef.current = setInterval(async () => {
+      setPollCount((prev) => {
+        if (prev >= MAX_POLL_ATTEMPTS) {
+          clearInterval(intervalRef.current);
+          setPollStatus("timeout");
+          return prev;
+        }
+        return prev + 1;
+      });
+
+      try {
+        let paid = false;
+
+        if (paymentInfo.pollUrl) {
+          // Use Paynow direct poll
+          const res = await fetch(
+            `http://localhost:5000/api/subscriptions/poll-paynow?pollUrl=${encodeURIComponent(paymentInfo.pollUrl)}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const data = await res.json();
+          console.log("Poll result:", data);
+          if (data.paid) paid = true;
+        } else {
+          // Fall back to checking by reference
+          const res = await fetch(
+            `http://localhost:5000/api/subscriptions/status/${paymentInfo.paymentRef}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const data = await res.json();
+          if (data.isPremium) paid = true;
+        }
+
+        if (paid) {
+          clearInterval(intervalRef.current);
+          setPollStatus("paid");
+        }
+      } catch (err) {
+        console.error("Poll error:", err);
+      }
+    }, 5000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [paymentInfo, token, pollStatus]); // Added pollStatus to dependencies
 
   const handleUpgrade = async () => {
     if (!token) {
@@ -83,20 +142,33 @@ export default function UpgradePage() {
 
     setError("");
 
-if (!phone.trim()) {
-  setError("Please enter your mobile number for payment verification.");
-  return;
-}
+    if (!phone.trim()) {
+      setError("Please enter your mobile number.");
+      return;
+    }
 
-if (phone.trim().length < 9) {
-  setError("Please enter a valid mobile number.");
-  return;
-}
+    // Zimbabwe phone validation
+    const phoneRegex = /^(07[7-8][0-9]{7}|07[1-2][0-9]{7})$/;
+    if (!phoneRegex.test(phone.trim())) {
+      setError("Please enter a valid Zimbabwe mobile number (e.g., 0771234567)");
+      return;
+    }
 
-setLoading(true);
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/subscriptions/initiate", {
+      const res = await fetch("http://localhost:5000/api/subscriptions/initiate-paynow", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -105,88 +177,177 @@ setLoading(true);
         body: JSON.stringify({
           plan: selectedPlan,
           paymentMethod: selectedMethod,
-          phone,
+          phone: phone.trim(),
+          email: email.trim(),
         }),
       });
 
       const data = await res.json();
+      console.log("Payment initiation response:", data);
 
       if (data.success) {
-        setPaymentInfo(data);
+        setPaymentInfo({
+          paymentRef: data.paymentRef,
+          plan: data.plan,
+          amount: data.amount,
+          paymentMethod: selectedMethod,
+          instructions: data.instructions,
+          pollUrl: data.pollUrl || null,
+          redirectUrl: data.redirectUrl || null,
+        });
+        setPollCount(0);
+        setPollStatus("waiting");
+
+        // For omari redirect
+        if (selectedMethod === "omari" && data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        }
       } else {
         setError(data.error || "Failed to initiate payment.");
       }
     } catch (err) {
+      console.error("Payment initiation error:", err);
       setError("Cannot connect to server. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Payment instructions screen
+  // Success screen
+  if (pollStatus === "paid") {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-10 max-w-md w-full text-center">
+          <div className="text-6xl mb-4">🎉</div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Payment Confirmed!
+          </h1>
+          <p className="text-gray-500 mb-2">Welcome to ZimMaths Premium!</p>
+          <p className="text-sm text-gray-400 mb-2">
+            Your {plans.find((p) => p.id === selectedPlan)?.label} plan is now active.
+          </p>
+          <p className="text-xs text-gray-300 mb-8">
+            Reference: {paymentInfo?.paymentRef}
+          </p>
+          {/* FIXED: Added missing opening <a> tag and closing </a> tag */}
+          <a
+            href="/dashboard"
+            className="block w-full bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition text-center"
+          >
+            Go to Dashboard
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  // Timeout screen
+  if (pollStatus === "timeout") {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-10 max-w-md w-full text-center">
+          <div className="text-6xl mb-4">⏰</div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            Payment Still Pending
+          </h1>
+          <p className="text-gray-500 mb-4">
+            We haven't received confirmation yet.
+          </p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm text-yellow-800 font-semibold mb-2">What to do:</p>
+            <ul className="text-sm text-yellow-700 space-y-1">
+              <li>• Check if you completed the payment on your phone</li>
+              <li>• Make sure you have sufficient balance</li>
+              <li>• Try the payment again</li>
+            </ul>
+          </div>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setPaymentInfo(null);
+                setPollStatus("waiting");
+                setPollCount(0);
+              }}
+              className="w-full bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => router.push("/")}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold transition"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Pending screen
   if (paymentInfo) {
     return (
       <main className="min-h-screen bg-gray-50">
         <section className="bg-brand-800 text-white py-12 px-6 text-center">
-          <div className="text-5xl mb-3">💳</div>
-          <h1 className="text-3xl font-bold mb-2">Complete Your Payment</h1>
-          <p className="text-brand-200">Follow the steps below to activate your premium access</p>
+          <div className="text-5xl mb-3">📱</div>
+          <h1 className="text-3xl font-bold mb-2">Check Your Phone</h1>
+          <p className="text-brand-200">
+            A payment request has been sent to {phone}
+          </p>
         </section>
 
         <div className="max-w-lg mx-auto px-6 py-10 space-y-6">
 
           {/* Payment Reference */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-            <p className="text-sm text-gray-500 mb-1">Your payment reference</p>
-            <p className="text-2xl font-bold text-brand-800 font-mono tracking-wider">
+            <p className="text-sm text-gray-500 mb-1">Payment reference</p>
+            <p className="text-xl font-bold text-brand-800 font-mono break-all">
               {paymentInfo.paymentRef}
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              Amount: <span className="font-bold text-gray-800">${paymentInfo.amount} USD</span>
+              Amount:{" "}
+              <span className="font-bold text-gray-800">
+                ${paymentInfo.amount} USD
+              </span>
               {" · "}
-              Plan: <span className="font-bold text-gray-800">{paymentInfo.plan}</span>
+              Plan:{" "}
+              <span className="font-bold text-gray-800">{paymentInfo.plan}</span>
             </p>
           </div>
 
           {/* Instructions */}
           <div className="bg-brand-50 border border-brand-200 rounded-2xl p-6">
-            <h2 className="font-bold text-brand-800 mb-3">📋 Payment Instructions</h2>
-            <p className="text-brand-700 leading-relaxed">{paymentInfo.instructions}</p>
+            <h2 className="font-bold text-brand-800 mb-3">📋 Instructions</h2>
+            <p className="text-brand-700 leading-relaxed">
+              {paymentInfo.instructions}
+            </p>
           </div>
 
-          {/* Steps */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow p-6 space-y-4">
-            <h2 className="font-bold text-gray-800">How to complete:</h2>
-            {[
-              "Send the exact amount using your chosen payment method",
-              "Use your reference number: " + paymentInfo.paymentRef,
-              "Send your payment screenshot to our WhatsApp",
-              "We will activate your account within 30 minutes",
-            ].map((step, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-brand-700 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {i + 1}
-                </div>
-                <p className="text-gray-700 text-sm pt-0.5">{step}</p>
-              </div>
-            ))}
+          {/* Waiting indicator */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow p-6 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="font-semibold text-gray-700 mb-1">
+              Waiting for payment confirmation...
+            </p>
+            <p className="text-sm text-gray-400">
+              This page will update automatically once payment is received.
+            </p>
+            <p className="text-xs text-gray-300 mt-2">
+              Checking... ({pollCount} / {MAX_POLL_ATTEMPTS})
+            </p>
           </div>
-
-          {/* WhatsApp CTA */}
-          <a
-            href={`https://wa.me/2637712345678?text=Hi!%20I%20have%20made%20payment%20for%20ZimMaths%20Premium.%20Reference:%20${paymentInfo.paymentRef}%20Plan:%20${paymentInfo.plan}%20Amount:%20$${paymentInfo.amount}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full bg-green-500 hover:bg-green-400 text-white py-4 rounded-xl font-bold text-lg text-center transition"
-          >
-            📲 Send Screenshot on WhatsApp
-          </a>
 
           <button
-            onClick={() => router.push("/")}
-            className="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center transition"
+            onClick={() => {
+              if (intervalRef.current) clearInterval(intervalRef.current);
+              setPaymentInfo(null);
+              setPollStatus("waiting");
+            }}
+            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold transition"
           >
-            Back to Home
+            Back to Plans
           </button>
 
         </div>
@@ -194,10 +355,10 @@ setLoading(true);
     );
   }
 
+  // Main upgrade screen
   return (
     <main className="min-h-screen bg-gray-50">
 
-      {/* Header */}
       <section className="bg-brand-800 text-white py-12 px-6 text-center">
         <div className="text-5xl mb-3">⭐</div>
         <h1 className="text-3xl font-bold mb-2">Unlock ZimMaths Premium</h1>
@@ -230,11 +391,13 @@ setLoading(true);
                 }`}
               >
                 {plan.badge && (
-                  <span className={`absolute -top-3 left-4 text-xs font-bold px-3 py-1 rounded-full ${
-                    plan.badge === "BEST VALUE"
-                      ? "bg-green-500 text-white"
-                      : "bg-brand-600 text-white"
-                  }`}>
+                  <span
+                    className={`absolute -top-3 left-4 text-xs font-bold px-3 py-1 rounded-full ${
+                      plan.badge === "BEST VALUE"
+                        ? "bg-green-500 text-white"
+                        : "bg-brand-600 text-white"
+                    }`}
+                  >
                     {plan.badge}
                   </span>
                 )}
@@ -269,7 +432,7 @@ setLoading(true);
               <button
                 key={method.id}
                 onClick={() => setSelectedMethod(method.id)}
-                className={`border-2 rounded-xl p-4 text-center transition font-semibold ${
+                className={`border-2 rounded-xl p-4 text-center transition ${
                   selectedMethod === method.id
                     ? "border-brand-600 bg-brand-50 text-brand-700"
                     : "border-gray-200 bg-white text-gray-700 hover:border-brand-300"
@@ -282,21 +445,39 @@ setLoading(true);
           </div>
         </div>
 
-        {/* Phone number (required) */}
-        <div>
-       <label className="block text-sm font-semibold text-gray-700 mb-2">
-         Your mobile number <span className="text-red-500">*</span>
-        </label>
-        <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="e.g. 0771234567"
-            className="w-full border border-gray-300 rounded-xl px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-        />
+        {/* Contact Details */}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Your mobile number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 0771234567"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
             <p className="text-xs text-gray-400 mt-1">
-                Required for payment verification and account activation
+              A payment request will be sent to this number
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Email address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              For payment receipt and account activation
+            </p>
+          </div>
         </div>
 
         {/* Error */}
@@ -327,11 +508,11 @@ setLoading(true);
             disabled={loading}
             className="w-full bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white py-4 rounded-xl font-bold text-lg transition"
           >
-            {loading ? "Processing..." : "Get Payment Instructions →"}
+            {loading ? "Sending payment request..." : "Pay Now →"}
           </button>
 
           <p className="text-xs text-gray-400 text-center mt-3">
-            Your account will be activated within 30 minutes of payment confirmation
+            Payments processed securely by Paynow Zimbabwe
           </p>
         </div>
 

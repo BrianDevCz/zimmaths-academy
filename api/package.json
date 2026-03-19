@@ -23,6 +23,7 @@
     "express-rate-limit": "^8.3.1",
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.29.0",
+    "paynow": "^2.2.2",
     "prisma": "^5.22.0",
     "zod": "^4.3.6"
   },
