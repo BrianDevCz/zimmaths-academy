@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
+import MathContent from "../../components/MathContent";
+import MathKeyboard from "../../components/MathKeyboard";
 
 export default function PracticeTestPage() {
   const router = useRouter();
@@ -184,39 +186,42 @@ export default function PracticeTestPage() {
                     Q{index + 1} — {result.topic}
                   </span>
                 </div>
-                <p className="text-gray-800 mb-3">{result.questionText}</p>
+                {/* Replace with MathContent */}
+                <div className="text-gray-800 mb-3">
+                  <MathContent>{result.questionText || ""}</MathContent>
+                </div>
                 <div className="space-y-1 text-sm">
-  <p className="text-gray-600">
-    Your answer:{" "}
-    <span
-      className={
-        result.isCorrect
-          ? "text-green-600 font-medium"
-          : "text-red-600 font-medium"
-      }
-    >
-      {result.userAnswer || "No answer given"}
+                  <p className="text-gray-600">
+                    Your answer:{" "}
+                    <span
+                      className={
+                        result.isCorrect
+                          ? "text-green-600 font-medium"
+                          : "text-red-600 font-medium"
+                      }
+                    >
+                      {result.userAnswer || "No answer given"}
+                    </span>
+                  </p>
+                  {!result.isCorrect && result.correctAnswer && (
+  <div className="text-gray-600 flex gap-1 items-baseline flex-wrap">
+    <span>Correct answer:</span>
+    <span className="text-green-600 font-medium">
+      <MathContent>{result.correctAnswer}</MathContent>
     </span>
-  </p>
-  {!result.isCorrect && result.correctAnswer && (
-    <p className="text-gray-600">
-      Correct answer:{" "}
-      <span className="text-green-600 font-medium">
-        {result.correctAnswer}
-      </span>
-    </p>
-  )}
-  {result.confidence === "approximate" && (
-    <p className="text-blue-600 text-xs mt-1">
-      ✓ Accepted within rounding tolerance
-    </p>
-  )}
-  {result.feedback && !result.isCorrect && (
-    <p className="text-gray-500 text-xs mt-1 italic">
-      {result.feedback}
-    </p>
-  )}
-</div>
+  </div>
+)}
+                  {result.confidence === "approximate" && (
+                    <p className="text-blue-600 text-xs mt-1">
+                      ✓ Accepted within rounding tolerance
+                    </p>
+                  )}
+                  {result.feedback && !result.isCorrect && (
+                    <p className="text-gray-500 text-xs mt-1 italic">
+                      {result.feedback}
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -304,23 +309,21 @@ export default function PracticeTestPage() {
             </span>
           </div>
 
-          {/* Question Text */}
-          <p className="text-gray-800 text-xl leading-relaxed mb-6">
-            {currentQuestion?.questionText}
-          </p>
+          {/* Question Text - Replace with MathContent */}
+          <div className="text-gray-800 text-xl leading-relaxed mb-6">
+            <MathContent>{currentQuestion?.questionText || ""}</MathContent>
+          </div>
 
           {/* Answer Input */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Your Answer
-            </label>
-            <textarea
-              value={answers[currentQuestion?.id] || ""}
-              onChange={(e) => handleAnswer(e.target.value)}
-              placeholder="Type your answer here... Show your working!"
-              rows={4}
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none"
-            />
+          </label>
+          <MathKeyboard
+            value={answers[currentQuestion?.id] || ""}
+            onChange={(val) => handleAnswer(val)}
+            placeholder="Tap buttons below or type your answer..."
+          />
           </div>
         </div>
 

@@ -26,6 +26,8 @@ export default function Navbar() {
           width={65}
           height={65}
           className="rounded-lg"
+          loading="eager"
+          priority
         />
         <div>
           <span className="text-xl font-bold text-white">ZIM</span>

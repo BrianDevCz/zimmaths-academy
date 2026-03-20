@@ -18,8 +18,8 @@ export default async function PapersPage() {
 
       {/* Page Title */}
       <section className="bg-brand-800 text-white py-12 px-6 text-center">
-        <h1 className="text-4xl font-bold mb-3">Past Exam Papers</h1>
-        <p className="text-brand-200 text-lg">ZIMSEC O-Level Mathematics — Step-by-step solutions</p>
+        <h1 className="text-4xl font-bold mb-3">ZimMaths Practice Papers</h1>
+        <p className="text-brand-200 text-lg">Original O-Level Mathematics papers — Step-by-step solutions</p>
       </section>
 
       {/* Filters */}

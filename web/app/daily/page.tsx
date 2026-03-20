@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import MathContent from "../components/MathContent";
+import MathKeyboard from "../components/MathKeyboard";
 
 export default function DailyChallengePage() {
   const [challenge, setChallenge] = useState<any>(null);
@@ -14,16 +16,11 @@ export default function DailyChallengePage() {
   useEffect(() => {
     fetchChallenge();
     fetchYesterday();
-
-    // Check if already submitted today
     const submittedToday = localStorage.getItem("dailySubmitted");
     const today = new Date().toDateString();
-    if (submittedToday === today) {
-      setSubmitted(true);
-    }
+    if (submittedToday === today) setSubmitted(true);
   }, []);
 
-  // Countdown timer to midnight
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -33,9 +30,7 @@ export default function DailyChallengePage() {
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      setTimeLeft(
-        hours + "h " + minutes + "m " + seconds + "s"
-      );
+      setTimeLeft(hours + "h " + minutes + "m " + seconds + "s");
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -45,7 +40,7 @@ export default function DailyChallengePage() {
       const res = await fetch("http://localhost:5000/api/daily/today");
       const data = await res.json();
       if (data.success) setChallenge(data.data);
-    } catch (err) {
+    } catch {
       setError("Failed to load today's challenge");
     } finally {
       setLoading(false);
@@ -57,9 +52,7 @@ export default function DailyChallengePage() {
       const res = await fetch("http://localhost:5000/api/daily/yesterday");
       const data = await res.json();
       if (data.success) setYesterday(data.data);
-    } catch (err) {
-      // No yesterday challenge — that's fine
-    }
+    } catch {}
   };
 
   const handleSubmit = async () => {
@@ -67,31 +60,23 @@ export default function DailyChallengePage() {
       setError("Please enter your answer");
       return;
     }
-
     setSubmitting(true);
     setError("");
-
     try {
       const res = await fetch("http://localhost:5000/api/daily/attempt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          challengeId: challenge.id,
-          userAnswer: answer,
-        }),
+        body: JSON.stringify({ challengeId: challenge.id, userAnswer: answer }),
       });
-
       const data = await res.json();
-
       if (data.success) {
         setSubmitted(true);
-        // Save to localStorage so they can't re-submit today
         localStorage.setItem("dailySubmitted", new Date().toDateString());
         localStorage.setItem("dailyAnswer", answer);
       } else {
         setError(data.message || "Failed to submit");
       }
-    } catch (err) {
+    } catch {
       setError("Cannot connect to server");
     } finally {
       setSubmitting(false);
@@ -116,9 +101,7 @@ export default function DailyChallengePage() {
       <section className="bg-brand-800 text-white py-12 px-6 text-center">
         <div className="text-5xl mb-4">🏆</div>
         <h1 className="text-4xl font-bold mb-2">Daily Challenge</h1>
-        <p className="text-brand-200 text-lg">
-          A new ZIMSEC maths question every day
-        </p>
+        <p className="text-brand-200 text-lg">A new maths question every day</p>
         <div className="mt-4 inline-block bg-brand-700 px-6 py-2 rounded-full">
           <span className="text-brand-200 text-sm">New challenge in: </span>
           <span className="text-white font-bold">{timeLeft}</span>
@@ -131,20 +114,16 @@ export default function DailyChallengePage() {
         {challenge ? (
           <div className="bg-white rounded-2xl shadow p-8 border border-gray-200">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
-                Today's Challenge
-              </h2>
+              <h2 className="text-xl font-bold text-gray-800">Today's Challenge</h2>
               <span className="text-sm text-gray-400">
                 {new Date().toLocaleDateString("en-GB", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
+                  weekday: "long", day: "numeric", month: "long",
                 })}
               </span>
             </div>
 
             {/* Topic Badge */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 flex-wrap">
               <span className="bg-brand-100 text-brand-700 text-xs font-semibold px-3 py-1 rounded-full">
                 {challenge.question?.topic?.name}
               </span>
@@ -156,19 +135,17 @@ export default function DailyChallengePage() {
               </span>
             </div>
 
-            {/* Question */}
-            <p className="text-gray-800 text-xl leading-relaxed mb-6">
-              {challenge.question?.questionText}
-            </p>
+            {/* Question with MathContent */}
+            <div className="text-gray-800 text-xl leading-relaxed mb-6">
+              <MathContent>{challenge.question?.questionText || ""}</MathContent>
+            </div>
 
             {/* Answer Section */}
             {submitted ? (
               <div className="space-y-4">
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
                   <div className="text-3xl mb-2">✅</div>
-                  <p className="text-green-700 font-semibold text-lg">
-                    Answer submitted!
-                  </p>
+                  <p className="text-green-700 font-semibold text-lg">Answer submitted!</p>
                   <p className="text-green-600 text-sm mt-1">
                     Your answer: <strong>{localStorage.getItem("dailyAnswer")}</strong>
                   </p>
@@ -176,8 +153,7 @@ export default function DailyChallengePage() {
                     Come back tomorrow to see the solution!
                   </p>
                 </div>
-
-                {/* Share Button */}
+                
                 <a
                   href={
                     "https://wa.me/?text=I just attempted today's ZimMaths Daily Challenge! Can you solve it? " +
@@ -202,12 +178,10 @@ export default function DailyChallengePage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Your Answer
                   </label>
-                  <textarea
+                  <MathKeyboard
                     value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    placeholder="Type your answer here... Show your working!"
-                    rows={4}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none"
+                    onChange={setAnswer}
+                    placeholder="Tap buttons below or type your answer..."
                   />
                 </div>
                 <button
@@ -217,8 +191,7 @@ export default function DailyChallengePage() {
                 >
                   {submitting ? "Submitting..." : "Submit Answer"}
                 </button>
-
-                {/* Share without answering */}
+                
                 <a
                   href={
                     "https://wa.me/?text=Can you solve today's ZimMaths Daily Challenge? " +
@@ -237,26 +210,19 @@ export default function DailyChallengePage() {
             {/* Stats */}
             <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center gap-8 text-center">
               <div>
-                <p className="text-2xl font-bold text-brand-800">
-                  {challenge.totalAttempts || 0}
-                </p>
+                <p className="text-2xl font-bold text-brand-800">{challenge.totalAttempts || 0}</p>
                 <p className="text-xs text-gray-400">Students attempted</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-brand-800">
-                  {challenge.correctAttempts || 0}
-                </p>
+                <p className="text-2xl font-bold text-brand-800">{challenge.correctAttempts || 0}</p>
                 <p className="text-xs text-gray-400">Got it correct</p>
               </div>
             </div>
-
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow p-10 text-center border border-gray-200">
             <div className="text-4xl mb-4">🔧</div>
-            <p className="text-gray-500 text-lg">
-              No challenge available today. Check back soon!
-            </p>
+            <p className="text-gray-500 text-lg">No challenge available today. Check back soon!</p>
           </div>
         )}
 
@@ -268,36 +234,25 @@ export default function DailyChallengePage() {
             </h2>
             <p className="text-gray-400 text-sm mb-4">
               {new Date(Date.now() - 86400000).toLocaleDateString("en-GB", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
+                weekday: "long", day: "numeric", month: "long",
               })}
             </p>
-
-            <p className="text-gray-800 text-lg mb-4 leading-relaxed">
-              {yesterday.question?.questionText}
-            </p>
-
-            <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
-              <p className="text-sm font-semibold text-brand-700 mb-2">
-                Solution
-              </p>
-              <p className="text-gray-800">
-                {yesterday.question?.solutionText}
-              </p>
+            <div className="text-gray-800 text-lg mb-4 leading-relaxed">
+              <MathContent>{yesterday.question?.questionText || ""}</MathContent>
             </div>
-
+            <div className="bg-brand-50 rounded-xl p-4 border border-brand-100">
+              <p className="text-sm font-semibold text-brand-700 mb-2">Solution</p>
+              <div className="text-gray-800">
+                <MathContent>{yesterday.question?.solutionText || ""}</MathContent>
+              </div>
+            </div>
             <div className="mt-4 flex gap-8 text-center">
               <div>
-                <p className="text-xl font-bold text-brand-800">
-                  {yesterday.totalAttempts || 0}
-                </p>
+                <p className="text-xl font-bold text-brand-800">{yesterday.totalAttempts || 0}</p>
                 <p className="text-xs text-gray-400">Attempted</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-brand-800">
-                  {yesterday.correctAttempts || 0}
-                </p>
+                <p className="text-xl font-bold text-brand-800">{yesterday.correctAttempts || 0}</p>
                 <p className="text-xs text-gray-400">Got it correct</p>
               </div>
             </div>

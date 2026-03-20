@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@uploadcare/react-uploader": "^1.13.0",
-    "katex": "^0.16.38",
+    "katex": "^0.16.39",
     "next": "^16.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

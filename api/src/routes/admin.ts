@@ -70,15 +70,10 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
         createdAt: true,
         lastActive: true,
         subscription: {
-          select: {
-            status: true,
-            plan: true,
-            expiresAt: true,
-          },
+          select: { status: true, plan: true, expiresAt: true },
         },
       },
     });
-
     return res.status(200).json({ success: true, data: users });
   } catch (error) {
     console.error("Admin users error:", error);
@@ -91,11 +86,8 @@ router.get("/papers", async (req: AuthRequest, res: Response) => {
   try {
     const papers = await prisma.paper.findMany({
       orderBy: { year: "desc" },
-      include: {
-        _count: { select: { questions: true } },
-      },
+      include: { _count: { select: { questions: true } } },
     });
-
     return res.status(200).json({ success: true, data: papers });
   } catch (error) {
     console.error("Admin papers error:", error);
@@ -119,7 +111,6 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
     }
 
     const paper = await prisma.paper.create({ data: parsed.data });
-
     return res.status(201).json({ success: true, data: paper });
   } catch (error) {
     console.error("Admin create paper error:", error);
@@ -138,11 +129,22 @@ router.delete("/papers/:id", async (req: AuthRequest, res: Response) => {
   }
 });
 
+
 // GET /api/admin/questions
+// If paperId provided — return questions for that paper
+// If practiceOnly=true — return questions with no paper
+// If no filter — return all questions
+
 router.get("/questions", async (req: AuthRequest, res: Response) => {
   try {
-    const { paperId } = req.query;
-    const where = paperId ? { paperId: String(paperId) } : {};
+    const { paperId, practiceOnly } = req.query;
+
+    let where: any = {};
+    if (paperId) {
+      where.paperId = String(paperId);
+    } else if (practiceOnly === "true") {
+      where.paperId = null;
+    }
 
     const questions = await prisma.question.findMany({
       where,
@@ -161,10 +163,11 @@ router.get("/questions", async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/admin/questions
+// paperId is optional — questions without a paperId are practice-only
 router.post("/questions", async (req: AuthRequest, res: Response) => {
   try {
     const schema = z.object({
-      paperId: z.string().min(1, "Paper is required"),
+      paperId: z.string().optional().nullable(),
       topicId: z.string().min(1, "Topic is required"),
       questionNumber: z.number().int().min(1),
       questionText: z.string().min(1, "Question text is required"),
@@ -173,6 +176,7 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       correctAnswer: z.string().optional(),
       solutionText: z.string().optional(),
       solutionSteps: z.any().optional(),
+      questionImageUrl: z.string().optional(),
       isFree: z.boolean().default(false),
       isDailyEligible: z.boolean().default(false),
     });
@@ -182,8 +186,13 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     }
 
-    const question = await prisma.question.create({ data: parsed.data });
+    // If paperId is empty string, set to null
+    const data = {
+      ...parsed.data,
+      paperId: parsed.data.paperId || null,
+    };
 
+    const question = await prisma.question.create({ data: data as any });
     return res.status(201).json({ success: true, data: question });
   } catch (error) {
     console.error("Admin create question error:", error);
@@ -198,7 +207,6 @@ router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
       where: { id: String(req.params.id) },
       data: req.body,
     });
-
     return res.status(200).json({ success: true, data: question });
   } catch (error) {
     console.error("Admin update question error:", error);
@@ -223,12 +231,9 @@ router.get("/subscriptions", async (req: AuthRequest, res: Response) => {
     const subscriptions = await prisma.subscription.findMany({
       orderBy: { startedAt: "desc" },
       include: {
-        user: {
-          select: { name: true, email: true, grade: true },
-        },
+        user: { select: { name: true, email: true, grade: true } },
       },
     });
-
     return res.status(200).json({ success: true, data: subscriptions });
   } catch (error) {
     console.error("Admin subscriptions error:", error);
@@ -240,16 +245,13 @@ router.get("/subscriptions", async (req: AuthRequest, res: Response) => {
 router.put("/users/:id/role", async (req: AuthRequest, res: Response) => {
   try {
     const { role } = req.body;
-
     if (!["student", "admin"].includes(role)) {
       return res.status(400).json({ success: false, error: "Invalid role." });
     }
-
     const user = await prisma.user.update({
       where: { id: String(req.params.id) },
       data: { role },
     });
-
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
     console.error("Admin update role error:", error);
@@ -262,7 +264,6 @@ router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Resp
   try {
     const { plan } = req.body;
     const days = plan === "two_weeks" ? 14 : plan === "annual" ? 365 : 30;
-
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
 
@@ -296,9 +297,7 @@ router.get("/lessons", async (req: AuthRequest, res: Response) => {
     const lessons = await prisma.lesson.findMany({
       where,
       orderBy: { orderIndex: "asc" },
-      include: {
-        topic: { select: { name: true, slug: true } },
-      },
+      include: { topic: { select: { name: true, slug: true } } },
     });
 
     return res.status(200).json({ success: true, data: lessons });
@@ -327,7 +326,6 @@ router.post("/lessons", async (req: AuthRequest, res: Response) => {
     }
 
     const lesson = await prisma.lesson.create({ data: parsed.data });
-
     return res.status(201).json({ success: true, data: lesson });
   } catch (error) {
     console.error("Admin create lesson error:", error);
@@ -342,7 +340,6 @@ router.put("/lessons/:id", async (req: AuthRequest, res: Response) => {
       where: { id: String(req.params.id) },
       data: req.body,
     });
-
     return res.status(200).json({ success: true, data: lesson });
   } catch (error) {
     console.error("Admin update lesson error:", error);

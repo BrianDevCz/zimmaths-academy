@@ -77,7 +77,7 @@ model Paper {
 
 model Question {
   id               String   @id @default(uuid())
-  paperId          String
+  paperId          String?
   questionNumber   Int
   questionText     String
   questionImageUrl String?
@@ -93,7 +93,7 @@ model Question {
   isDailyEligible  Boolean  @default(false)
   createdAt        DateTime @default(now())
 
-  paper           Paper            @relation(fields: [paperId], references: [id])
+  paper           Paper?            @relation(fields: [paperId], references: [id])
   topic           Topic            @relation(fields: [topicId], references: [id])
   dailyChallenges DailyChallenge[]
   bookmarks       Bookmark[]

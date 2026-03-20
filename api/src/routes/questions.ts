@@ -1,13 +1,61 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { AuthRequest } from "../middleware/auth";
+import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// GET single question by ID
-// Solution is gated — only returned if question is free OR user has active premium
-router.get("/:id", async (req: AuthRequest, res: Response) => {
+// GET random questions for practice — PUBLIC
+router.get("/", async (req: any, res: Response) => {
+  try {
+    const { topic, difficulty, count = "5", exclude } = req.query;
+
+    const excludeIds = exclude
+      ? String(exclude).split(",").filter(Boolean)
+      : [];
+
+    const where: any = {};
+    if (topic) where.topic = { slug: String(topic) };
+    if (difficulty && difficulty !== "mixed")
+      where.difficulty = String(difficulty);
+    if (excludeIds.length > 0) where.id = { notIn: excludeIds };
+
+    const questions = await prisma.question.findMany({
+      where,
+      take: Math.min(parseInt(String(count)), 20),
+      orderBy: { id: "asc" },
+      include: {
+        topic: { select: { name: true, slug: true } },
+      },
+    });
+
+    const safeQuestions = questions.map((q) => ({
+      id: q.id,
+      questionNumber: q.questionNumber,
+      questionText: q.questionText,
+      questionImageUrl: (q as any).questionImageUrl,
+      marks: q.marks,
+      difficulty: q.difficulty,
+      topic: q.topic,
+      isFree: q.isFree,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: safeQuestions,
+      count: safeQuestions.length,
+    });
+  } catch (error) {
+    console.error("Questions fetch error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch questions. Please try again.",
+    });
+  }
+});
+
+// GET single question by ID — AUTH REQUIRED
+router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const question = await prisma.question.findUnique({
       where: { id: String(req.params.id) },
@@ -31,9 +79,7 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Check if user has premium access
     let hasPremium = false;
-
     if (req.userId) {
       const subscription = await prisma.subscription.findFirst({
         where: {
@@ -45,17 +91,15 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
       hasPremium = !!subscription;
     }
 
-    // Determine if solution should be returned
     const canViewSolution = question.isFree || hasPremium;
 
-    // Strip solution data if user cannot access it
     const responseData = {
-          ...question,
-          solutionSteps: canViewSolution ? question.solutionSteps : null,
-          solutionText: canViewSolution ? question.solutionText : null,
-          locked: !canViewSolution,
-          upgradeUrl: !canViewSolution ? "/upgrade" : null,
-      };
+      ...question,
+      solutionSteps: canViewSolution ? question.solutionSteps : null,
+      solutionText: canViewSolution ? question.solutionText : null,
+      locked: !canViewSolution,
+      upgradeUrl: !canViewSolution ? "/upgrade" : null,
+    };
 
     return res.status(200).json({
       success: true,
@@ -66,57 +110,6 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       error: "Failed to fetch question. Please try again.",
-    });
-  }
-});
-
-// GET random questions for practice
-router.get("/", async (req: AuthRequest, res: Response) => {
-  try {
-    const { topic, difficulty, count = "5", exclude } = req.query;
-
-    const excludeIds = exclude
-      ? String(exclude).split(",").filter(Boolean)
-      : [];
-
-    const where: any = {};
-    if (topic) where.topic = { slug: String(topic) };
-    if (difficulty && difficulty !== "mixed")
-      where.difficulty = String(difficulty);
-    if (excludeIds.length > 0) where.id = { notIn: excludeIds };
-
-    const questions = await prisma.question.findMany({
-      where,
-      take: Math.min(parseInt(String(count)), 20), // Max 20 per request
-      orderBy: { id: "asc" },
-      include: {
-        topic: { select: { name: true, slug: true } },
-      },
-    });
-
-    // For practice mode — return questions without solutions
-    // Solutions are fetched separately when student submits answer
-    const safeQuestions = questions.map((q) => ({
-      id: q.id,
-      questionNumber: q.questionNumber,
-      questionText: q.questionText,
-      questionImageUrl: q.questionImageUrl,
-      marks: q.marks,
-      difficulty: q.difficulty,
-      topic: q.topic,
-      isFree: q.isFree,
-    }));
-
-    return res.status(200).json({
-      success: true,
-      data: safeQuestions,
-      count: safeQuestions.length,
-    });
-  } catch (error) {
-    console.error("Questions fetch error:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch questions. Please try again.",
     });
   }
 });

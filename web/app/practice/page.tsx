@@ -76,7 +76,7 @@ export default function PracticePage() {
       <section className="bg-brand-800 text-white py-12 px-6 text-center">
         <h1 className="text-4xl font-bold mb-3">Smart Practice Mode</h1>
         <p className="text-brand-200 text-lg">
-          Generate instant practice tests from real ZIMSEC questions
+          Generate instant practice tests from our question bank
         </p>
       </section>
 

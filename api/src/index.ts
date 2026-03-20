@@ -1,5 +1,5 @@
 import adminRouter from "./routes/admin";
-import { requireAdmin } from "./middleware/auth";
+import { requireAdmin, requireAuth } from "./middleware/auth";
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -14,30 +14,30 @@ import dashboardRouter from './routes/dashboard';
 import rateLimit from "express-rate-limit";
 import leaderboardRouter from "./routes/leaderboard";
 import subscriptionsRouter from "./routes/subscriptions";
+import { PrismaClient } from "@prisma/client";
 
 dotenv.config();
 
-// General rate limiter — all routes
+// const prisma = new PrismaClient(); // REMOVED
+
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 500,
   message: { success: false, error: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Strict limiter — auth routes only
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 20,
   message: { success: false, error: "Too many login attempts. Please wait 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// AI limiter — prevent API cost abuse
 const aiLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 50,
   message: { success: false, error: "AI request limit reached. Please try again later." },
   standardHeaders: true,
@@ -47,49 +47,36 @@ const aiLimiter = rateLimit({
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
 app.use(generalLimiter);
 app.use(express.json());
 
-// Routes
-import { requireAuth } from "./middleware/auth";
+// REMOVED the entire app.get("/api/questions", ...) block here
 
-// Public routes — no auth needed
+// Public routes
 app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/topics", topicsRouter);
 app.use("/api/papers", papersRouter);
 app.use("/api/daily", dailyRouter);
 
-// Protected routes — login required
+// Protected routes
 app.use("/api/admin", requireAdmin, adminRouter);
-app.use("/api/questions", requireAuth, questionsRouter);
+app.use("/api/questions", questionsRouter);
 app.use("/api/practice", requireAuth, practiceRouter);
 app.use("/api/ai", aiLimiter, requireAuth, aiRouter);
 app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/leaderboard", requireAuth, leaderboardRouter);
 app.use("/api/subscriptions", requireAuth, subscriptionsRouter);
 
-
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    service: 'ZimMaths Academy API'
-  });
+  res.json({ status: 'healthy', timestamp: new Date().toISOString(), service: 'ZimMaths Academy API' });
 });
 
-// Root
 app.get('/', (req, res) => {
-  res.json({
-    message: 'ZimMaths Academy API is running! 🚀',
-    version: '1.0.0',
-    status: 'healthy'
-  });
+  res.json({ message: 'ZimMaths Academy API is running! 🚀', version: '1.0.0', status: 'healthy' });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`✅ ZimMaths API running on http://localhost:${PORT}`);
 });

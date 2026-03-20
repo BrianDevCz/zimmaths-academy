@@ -64,7 +64,7 @@ export default function Home() {
               Start Learning Free
             </a>
             <a href="/papers" className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
-              Browse Past Papers
+              Browse Practice Papers
             </a>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto flex flex-wrap justify-center gap-12 text-center">
           <div>
             <p className="text-3xl font-bold text-brand-300">50+</p>
-            <p className="text-brand-200 text-sm">Past Papers</p>
+            <p className="text-brand-200 text-sm">Practice Papers</p>
           </div>
           <div>
             <p className="text-3xl font-bold text-brand-300">15</p>
@@ -101,8 +101,8 @@ export default function Home() {
 
             <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
               <div className="text-4xl mb-4">📄</div>
-              <h3 className="text-xl font-bold text-brand-900 mb-2">Past Papers Library</h3>
-              <p className="text-gray-600">Every ZIMSEC O-Level Maths paper from 2010 to 2024 with full step-by-step solutions.</p>
+              <h3 className="text-xl font-bold text-brand-900 mb-2">Practice Papers Library</h3>
+              <p className="text-gray-600">Original ZimMaths practice papers covering all O-Level topics with full step-by-step solutions.</p>
             </div>
 
             <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">

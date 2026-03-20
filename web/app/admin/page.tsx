@@ -2,8 +2,11 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import * as LR from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
+import MathContent from "../components/MathContent";
+import LatexCheatSheet from "../components/LatexCheatSheet";
 
 export default function AdminPage() {
   const { token, user, loading: authLoading } = useAuth();
@@ -13,11 +16,14 @@ export default function AdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [papers, setPapers] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [practiceQuestions, setPracticeQuestions] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [formMessage, setFormMessage] = useState("");
+  const [formError, setFormError] = useState("");
 
   // Paper form
   const [paperForm, setPaperForm] = useState({
@@ -37,9 +43,6 @@ export default function AdminPage() {
     isFree: false, estimatedMinutes: 10, videoUrl: "",
   });
 
-  const [formMessage, setFormMessage] = useState("");
-  const [formError, setFormError] = useState("");
-
   useEffect(() => {
     if (authLoading) return;
     if (!token) {
@@ -54,7 +57,7 @@ export default function AdminPage() {
     if (!token) return;
     if (activeTab === "users") fetchUsers();
     if (activeTab === "papers") fetchPapers();
-    if (activeTab === "questions") fetchPapers();
+    if (activeTab === "questions") { fetchPapers(); fetchPracticeQuestions(); }
     if (activeTab === "lessons") fetchLessons();
     if (activeTab === "subscriptions") fetchSubscriptions();
   }, [activeTab, token]);
@@ -65,10 +68,7 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
-      if (res.status === 403) {
-        router.push("/");
-        return;
-      }
+      if (res.status === 403) { router.push("/"); return; }
       const data = await res.json();
       if (data.success) setStats(data.data);
       else setError(data.error);
@@ -100,6 +100,14 @@ export default function AdminPage() {
     } catch { setError("Failed to load questions."); }
   };
 
+  const fetchPracticeQuestions = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/questions?practiceOnly=true", { headers });
+      const data = await res.json();
+      if (data.success) setPracticeQuestions(data.data);
+    } catch { setError("Failed to load practice questions."); }
+  };
+
   const fetchLessons = async (topicId?: string) => {
     try {
       const url = topicId
@@ -128,8 +136,7 @@ export default function AdminPage() {
   };
 
   const handleAddPaper = async () => {
-    setFormError("");
-    setFormMessage("");
+    setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/papers", {
         method: "POST",
@@ -145,21 +152,19 @@ export default function AdminPage() {
         setFormMessage("Paper added successfully!");
         fetchPapers();
         setPaperForm({ title: "", year: new Date().getFullYear(), session: "november", paperNumber: 1 });
-      } else {
-        setFormError(data.error);
-      }
+      } else { setFormError(data.error); }
     } catch { setFormError("Failed to add paper."); }
   };
 
   const handleAddQuestion = async () => {
-    setFormError("");
-    setFormMessage("");
+    setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/questions", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
           ...questionForm,
+          paperId: questionForm.paperId || null,
           questionNumber: parseInt(String(questionForm.questionNumber)),
           marks: parseInt(String(questionForm.marks)),
         }),
@@ -168,6 +173,7 @@ export default function AdminPage() {
       if (data.success) {
         setFormMessage("Question added successfully!");
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+        fetchPracticeQuestions();
         setQuestionForm((prev) => ({
           ...prev,
           questionNumber: prev.questionNumber + 1,
@@ -176,15 +182,12 @@ export default function AdminPage() {
           solutionText: "",
           questionImageUrl: "",
         }));
-      } else {
-        setFormError(data.error);
-      }
+      } else { setFormError(data.error); }
     } catch { setFormError("Failed to add question."); }
   };
 
   const handleAddLesson = async () => {
-    setFormError("");
-    setFormMessage("");
+    setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/lessons", {
         method: "POST",
@@ -200,15 +203,9 @@ export default function AdminPage() {
         setFormMessage("Lesson added successfully!");
         fetchLessons(lessonForm.topicId || undefined);
         setLessonForm((prev) => ({
-          ...prev,
-          title: "",
-          content: "",
-          videoUrl: "",
-          orderIndex: prev.orderIndex + 1,
+          ...prev, title: "", content: "", videoUrl: "", orderIndex: prev.orderIndex + 1,
         }));
-      } else {
-        setFormError(data.error);
-      }
+      } else { setFormError(data.error); }
     } catch { setFormError("Failed to add lesson."); }
   };
 
@@ -225,6 +222,7 @@ export default function AdminPage() {
     try {
       await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers });
       if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+      fetchPracticeQuestions();
     } catch { setError("Failed to delete question."); }
   };
 
@@ -282,9 +280,7 @@ export default function AdminPage() {
             <h1 className="text-2xl font-bold">⚙️ Admin Panel</h1>
             <p className="text-brand-200 text-sm">ZimMaths Academy — Content Management</p>
           </div>
-          <a href="/" className="text-brand-300 hover:text-white text-sm transition">
-            ← Back to Site
-          </a>
+          <Link href="/" className="text-brand-300 hover:text-white text-sm transition">← Back to Site</Link>
         </div>
       </section>
 
@@ -309,23 +305,14 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* Global Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-            ⚠️ {error}
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {error}</div>
         )}
-
-        {/* Form Messages */}
         {formMessage && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm">
-            ✅ {formMessage}
-          </div>
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm">✅ {formMessage}</div>
         )}
         {formError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
-            ⚠️ {formError}
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {formError}</div>
         )}
 
         {/* STATS TAB */}
@@ -346,8 +333,6 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
-
-            {/* Recent Users */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">🆕 Recent Registrations</h2>
               <div className="overflow-x-auto">
@@ -368,16 +353,12 @@ export default function AdminPage() {
                         <td className="py-3 text-gray-500">{u.email}</td>
                         <td className="py-3 text-gray-500 capitalize">{u.grade?.replace("form", "Form ")}</td>
                         <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
                             {u.role}
                           </span>
                         </td>
                         <td className="py-3 text-gray-500">
-                          {new Date(u.createdAt).toLocaleDateString("en-GB", {
-                            day: "numeric", month: "short", year: "numeric",
-                          })}
+                          {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </td>
                       </tr>
                     ))}
@@ -396,50 +377,33 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
-                  <input
-                    type="text"
-                    value={paperForm.title}
-                    onChange={(e) => setPaperForm({ ...paperForm, title: e.target.value })}
-                    placeholder="e.g. ZIMSEC O-Level Maths November 2023 Paper 1"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                  <input type="text" value={paperForm.title} onChange={(e) => setPaperForm({ ...paperForm, title: e.target.value })}
+                    placeholder="e.g. ZimMaths Practice Paper — November 2024 Paper 1"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Year</label>
-                  <input
-                    type="number"
-                    value={paperForm.year}
-                    onChange={(e) => setPaperForm({ ...paperForm, year: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                  <input type="number" value={paperForm.year} onChange={(e) => setPaperForm({ ...paperForm, year: parseInt(e.target.value) })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Session</label>
-                  <select
-                    value={paperForm.session}
-                    onChange={(e) => setPaperForm({ ...paperForm, session: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                  <select value={paperForm.session} onChange={(e) => setPaperForm({ ...paperForm, session: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="june">June</option>
                     <option value="november">November</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Paper Number</label>
-                  <select
-                    value={paperForm.paperNumber}
-                    onChange={(e) => setPaperForm({ ...paperForm, paperNumber: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                  <select value={paperForm.paperNumber} onChange={(e) => setPaperForm({ ...paperForm, paperNumber: parseInt(e.target.value) })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value={1}>Paper 1</option>
                     <option value={2}>Paper 2</option>
                   </select>
                 </div>
               </div>
-              <button
-                onClick={handleAddPaper}
-                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
-              >
+              <button onClick={handleAddPaper} className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
                 Add Paper
               </button>
             </div>
@@ -467,19 +431,12 @@ export default function AdminPage() {
                         <td className="py-3 text-gray-500">Paper {paper.paperNumber}</td>
                         <td className="py-3 text-gray-500">{paper._count?.questions || 0}</td>
                         <td className="py-3">
-                          <button
-                            onClick={() => handleDeletePaper(paper.id)}
-                            className="text-red-500 hover:text-red-700 text-xs font-semibold"
-                          >
-                            Delete
-                          </button>
+                          <button onClick={() => handleDeletePaper(paper.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
                         </td>
                       </tr>
                     ))}
                     {papers.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-gray-400">No papers yet</td>
-                      </tr>
+                      <tr><td colSpan={6} className="py-8 text-center text-gray-400">No papers yet</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -491,11 +448,16 @@ export default function AdminPage() {
         {/* QUESTIONS TAB */}
         {activeTab === "questions" && (
           <div className="space-y-6">
+
+            {/* Add Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Question</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Paper</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Paper <span className="text-gray-400 font-normal text-xs">(optional — leave blank for practice-only)</span>
+                  </label>
                   <select
                     value={questionForm.paperId}
                     onChange={(e) => {
@@ -504,12 +466,13 @@ export default function AdminPage() {
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
                   >
-                    <option value="">Select a paper...</option>
+                    <option value="">No paper — Practice question only</option>
                     {papers.map((p: any) => (
                       <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
                   <select
@@ -523,60 +486,66 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Number</label>
-                  <input
-                    type="number"
-                    value={questionForm.questionNumber}
+                  <input type="number" value={questionForm.questionNumber}
                     onChange={(e) => setQuestionForm({ ...questionForm, questionNumber: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Marks</label>
-                  <input
-                    type="number"
-                    value={questionForm.marks}
+                  <input type="number" value={questionForm.marks}
                     onChange={(e) => setQuestionForm({ ...questionForm, marks: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Difficulty</label>
-                  <select
-                    value={questionForm.difficulty}
+                  <select value={questionForm.difficulty}
                     onChange={(e) => setQuestionForm({ ...questionForm, difficulty: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Correct Answer</label>
-                  <input
-                    type="text"
-                    value={questionForm.correctAnswer}
+                  <input type="text" value={questionForm.correctAnswer}
                     onChange={(e) => setQuestionForm({ ...questionForm, correctAnswer: e.target.value })}
-                    placeholder="e.g. 42 or x = 3"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    placeholder="e.g. 13 or $x = 3$ or $\frac{2}{3}$"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 font-mono" />
                 </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Text</label>
                   <textarea
                     value={questionForm.questionText}
                     onChange={(e) => setQuestionForm({ ...questionForm, questionText: e.target.value })}
-                    placeholder="Enter the full question text..."
+                    placeholder="e.g. Simplify $2\frac{1}{2} \div 3\frac{3}{4} + 1\frac{1}{5}$"
                     rows={3}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono"
                   />
+                  <LatexCheatSheet />
                 </div>
+
+                {/* Preview */}
+                {questionForm.questionText && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Preview</label>
+                    <div className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 text-gray-800">
+                      <MathContent>{questionForm.questionText}</MathContent>
+                    </div>
+                  </div>
+                )}
+
+                {/* Image Upload */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Question Diagram / Image{" "}
-                    <span className="text-gray-400 font-normal">(optional)</span>
+                    Question Diagram / Image <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
                   <LR.FileUploaderRegular
                     pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""}
@@ -586,67 +555,55 @@ export default function AdminPage() {
                       setQuestionForm({ ...questionForm, questionImageUrl: file.cdnUrl });
                       setFormMessage("Image uploaded successfully!");
                     }}
-                    onFileUploadFailed={() => setFormError("Image upload failed. Please try again.")}
+                    onFileUploadFailed={() => setFormError("Image upload failed.")}
                   />
                   {questionForm.questionImageUrl && (
                     <div className="mt-3">
                       <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
-                      <img
-                        src={questionForm.questionImageUrl}
-                        alt="Question diagram"
-                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain"
-                      />
-                      <button
-                        onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })}
-                        className="mt-2 text-xs text-red-500 hover:text-red-700"
-                      >
-                        Remove image
-                      </button>
+                      <img src={questionForm.questionImageUrl} alt="Question diagram"
+                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
+                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })}
+                        className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
                     </div>
                   )}
                 </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Solution / Working</label>
-                  <textarea
-                    value={questionForm.solutionText}
+                  <textarea value={questionForm.solutionText}
                     onChange={(e) => setQuestionForm({ ...questionForm, solutionText: e.target.value })}
-                    placeholder="Enter the full solution with working..."
+                    placeholder="Enter the full solution with working... LaTeX supported: $\frac{n}{2}$"
                     rows={4}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                 </div>
-                <div className="flex gap-6">
+
+                <div className="flex gap-6 flex-wrap">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={questionForm.isFree}
+                    <input type="checkbox" checked={questionForm.isFree}
                       onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600"
-                    />
+                      className="w-4 h-4 accent-brand-600" />
                     Free question
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={questionForm.isDailyEligible}
+                    <input type="checkbox" checked={questionForm.isDailyEligible}
                       onChange={(e) => setQuestionForm({ ...questionForm, isDailyEligible: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600"
-                    />
+                      className="w-4 h-4 accent-brand-600" />
                     Daily challenge eligible
                   </label>
                 </div>
+
               </div>
-              <button
-                onClick={handleAddQuestion}
-                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
-              >
+
+              <button onClick={handleAddQuestion}
+                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
                 Add Question
               </button>
             </div>
 
+            {/* Paper Questions List */}
             {questions.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">❓ Questions ({questions.length})</h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">📄 Paper Questions ({questions.length})</h2>
                 <div className="space-y-3">
                   {questions.map((q: any) => (
                     <div key={q.id} className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl">
@@ -655,14 +612,19 @@ export default function AdminPage() {
                           <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">Q{q.questionNumber}</span>
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">{q.difficulty}</span>
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{q.marks} marks</span>
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{q.topic?.name}</span>
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
-                          {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Has image</span>}
+                          {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Image</span>}
                         </div>
-                        <p className="text-sm text-gray-800 line-clamp-2">{q.questionText}</p>
-                        {q.questionImageUrl && (
-                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-xs max-h-32 rounded-lg border border-gray-200 object-contain" />
-                        )}
-                        {q.correctAnswer && <p className="text-xs text-green-600 mt-1">Answer: {q.correctAnswer}</p>}
+                        <div className="text-sm text-gray-800">
+                          <MathContent>{q.questionText || ""}</MathContent>
+                        </div>
+                        {q.correctAnswer && (
+  <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
+    <span>Answer:</span>
+    <MathContent>{q.correctAnswer}</MathContent>
+  </div>
+)}
                       </div>
                       <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
                     </div>
@@ -670,117 +632,116 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Practice-Only Questions List */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">
+                ✏️ Practice-Only Questions ({practiceQuestions.length})
+              </h2>
+              {practiceQuestions.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-6">
+                  No practice-only questions yet. Add a question without selecting a paper.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {practiceQuestions.map((q: any) => (
+                    <div key={q.id} className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex gap-2 mb-1 flex-wrap">
+                          <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">Q{q.questionNumber}</span>
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">{q.difficulty}</span>
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{q.marks} marks</span>
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{q.topic?.name}</span>
+                          {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
+                          {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily eligible</span>}
+                        </div>
+                        <div className="text-sm text-gray-800">
+                          <MathContent>{q.questionText || ""}</MathContent>
+                        </div>
+                        {q.correctAnswer && (
+  <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
+    <span>Answer:</span>
+    <MathContent>{q.correctAnswer}</MathContent>
+  </div>
+)}
+                      </div>
+                      <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
         {/* LESSONS TAB */}
         {activeTab === "lessons" && (
           <div className="space-y-6">
-
-            {/* Add Lesson Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Lesson</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
-                  <select
-                    value={lessonForm.topicId}
-                    onChange={(e) => {
-                      setLessonForm({ ...lessonForm, topicId: e.target.value });
-                      if (e.target.value) fetchLessons(e.target.value);
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                  <select value={lessonForm.topicId}
+                    onChange={(e) => { setLessonForm({ ...lessonForm, topicId: e.target.value }); if (e.target.value) fetchLessons(e.target.value); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">Select a topic...</option>
-                    {topics.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
+                    {topics.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Title</label>
-                  <input
-                    type="text"
-                    value={lessonForm.title}
+                  <input type="text" value={lessonForm.title}
                     onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
                     placeholder="e.g. Introduction to Algebra"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Order</label>
-                  <input
-                    type="number"
-                    value={lessonForm.orderIndex}
+                  <input type="number" value={lessonForm.orderIndex}
                     onChange={(e) => setLessonForm({ ...lessonForm, orderIndex: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Estimated Minutes</label>
-                  <input
-                    type="number"
-                    value={lessonForm.estimatedMinutes}
+                  <input type="number" value={lessonForm.estimatedMinutes}
                     onChange={(e) => setLessonForm({ ...lessonForm, estimatedMinutes: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     YouTube Video URL <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
-                  <input
-                    type="text"
-                    value={lessonForm.videoUrl}
+                  <input type="text" value={lessonForm.videoUrl}
                     onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
                     placeholder="e.g. https://www.youtube.com/watch?v=..."
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Paste a YouTube link — it will be embedded on the topic page</p>
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Content</label>
-                  <textarea
-                    value={lessonForm.content}
+                  <textarea value={lessonForm.content}
                     onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
-                    placeholder="Enter lesson content. You can use basic HTML for formatting e.g. <b>bold</b>, <br> for line breaks..."
+                    placeholder="Enter lesson content. Supports LaTeX math: $\frac{n}{2}$ and Markdown."
                     rows={8}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Supports basic HTML: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;br&gt; line break, &lt;ul&gt;&lt;li&gt;lists&lt;/li&gt;&lt;/ul&gt;
-                  </p>
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
+                  <LatexCheatSheet />
                 </div>
-
                 <div>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={lessonForm.isFree}
+                    <input type="checkbox" checked={lessonForm.isFree}
                       onChange={(e) => setLessonForm({ ...lessonForm, isFree: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600"
-                    />
+                      className="w-4 h-4 accent-brand-600" />
                     Free lesson
                   </label>
                 </div>
-
               </div>
-
-              <button
-                onClick={handleAddLesson}
-                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
-              >
+              <button onClick={handleAddLesson}
+                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
                 Add Lesson
               </button>
             </div>
 
-            {/* Lessons List */}
             {lessons.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4">📚 Lessons ({lessons.length})</h2>
@@ -800,12 +761,7 @@ export default function AdminPage() {
                           {lesson.content?.replace(/<[^>]*>/g, "").substring(0, 80)}...
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleDeleteLesson(lesson.id)}
-                        className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0"
-                      >
-                        Delete
-                      </button>
+                      <button onClick={() => handleDeleteLesson(lesson.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
                     </div>
                   ))}
                 </div>
@@ -829,7 +785,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Premium</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u: any) => (
@@ -838,17 +794,13 @@ export default function AdminPage() {
                       <td className="py-3 text-gray-500">{u.email}</td>
                       <td className="py-3 text-gray-500 capitalize">{u.grade?.replace("form", "Form ")}</td>
                       <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
                           {u.role}
                         </span>
                       </td>
                       <td className="py-3">
                         {u.subscription?.status === "active" ? (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                            ⭐ {u.subscription.plan}
-                          </span>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">⭐ {u.subscription.plan}</span>
                         ) : (
                           <span className="text-xs text-gray-400">Free</span>
                         )}
@@ -857,14 +809,8 @@ export default function AdminPage() {
                         {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </td>
                       <td className="py-3">
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) handleActivateSubscription(u.id, e.target.value);
-                            e.target.value = "";
-                          }}
-                          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600"
-                          defaultValue=""
-                        >
+                        <select onChange={(e) => { if (e.target.value) handleActivateSubscription(u.id, e.target.value); e.target.value = ""; }}
+                          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600" defaultValue="">
                           <option value="">Activate...</option>
                           <option value="two_weeks">2 Weeks</option>
                           <option value="monthly">Monthly</option>
@@ -897,7 +843,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Amount</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Expires</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Reference</th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody>
                   {subscriptions.map((s: any) => (
@@ -910,9 +856,7 @@ export default function AdminPage() {
                           s.status === "active" ? "bg-green-100 text-green-700" :
                           s.status === "pending" ? "bg-yellow-100 text-yellow-700" :
                           "bg-red-100 text-red-700"
-                        }`}>
-                          {s.status}
-                        </span>
+                        }`}>{s.status}</span>
                       </td>
                       <td className="py-3 text-gray-500">${s.amountUsd}</td>
                       <td className="py-3 text-gray-500">

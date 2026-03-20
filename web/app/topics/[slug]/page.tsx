@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import MathContent from "../../components/MathContent";
 
 export default function TopicPage() {
   const { token, loading: authLoading } = useAuth();
@@ -318,7 +319,8 @@ export default function TopicPage() {
                         {q.marks} marks
                       </span>
                     </div>
-                    <p className="text-gray-800">{q.questionText}</p>
+                    {/* Replace the plain text with MathContent component */}
+                    <MathContent>{q.questionText || ""}</MathContent>
                     {q.questionImageUrl && (
                       <img
                         src={q.questionImageUrl}
