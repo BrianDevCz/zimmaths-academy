@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
@@ -40,9 +41,10 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
-          login(data.token, data.user);
-          router.push("/");
-  } 
+  login(data.token, data.user);
+  const redirectTo = searchParams.get("redirect") || "/";
+  router.push(redirectTo);
+}
 
 else {
         setError(data.error || "Login failed. Please try again.");

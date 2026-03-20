@@ -6,7 +6,7 @@ import * as LR from "@uploadcare/react-uploader";
 import "@uploadcare/react-uploader/core.css";
 
 export default function AdminPage() {
-  const { token, user } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("stats");
   const [stats, setStats] = useState<any>(null);
@@ -34,11 +34,14 @@ export default function AdminPage() {
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    if (token) {
-      fetchStats();
-      fetchTopics();
-    }
-  }, [token]);
+  if (authLoading) return;
+  if (!token) {
+    router.push("/login?redirect=/admin");
+    return;
+  }
+  fetchStats();
+  fetchTopics();
+}, [token, authLoading]);
 
   useEffect(() => {
     if (!token) return;
@@ -51,15 +54,19 @@ export default function AdminPage() {
   const headers = { Authorization: `Bearer ${token}` };
 
   const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
-      const data = await res.json();
-      if (data.success) setStats(data.data);
-      else setError(data.error);
-    } catch { setError("Cannot connect to server."); }
-    finally { setLoading(false); }
-  };
+  setLoading(true);
+  try {
+    const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
+    if (res.status === 403) {
+      router.push("/");
+      return;
+    }
+    const data = await res.json();
+    if (data.success) setStats(data.data);
+    else setError(data.error);
+  } catch { setError("Cannot connect to server."); }
+  finally { setLoading(false); }
+};
 
   const fetchUsers = async () => {
     try {
