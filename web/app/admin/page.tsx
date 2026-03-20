@@ -13,6 +13,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [papers, setPapers] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [lessons, setLessons] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,43 +31,50 @@ export default function AdminPage() {
     isFree: false, isDailyEligible: false, questionImageUrl: "",
   });
 
+  // Lesson form
+  const [lessonForm, setLessonForm] = useState({
+    topicId: "", title: "", content: "", orderIndex: 1,
+    isFree: false, estimatedMinutes: 10, videoUrl: "",
+  });
+
   const [formMessage, setFormMessage] = useState("");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-  if (authLoading) return;
-  if (!token) {
-    router.push("/login?redirect=/admin");
-    return;
-  }
-  fetchStats();
-  fetchTopics();
-}, [token, authLoading]);
+    if (authLoading) return;
+    if (!token) {
+      router.push("/login?redirect=/admin");
+      return;
+    }
+    fetchStats();
+    fetchTopics();
+  }, [token, authLoading]);
 
   useEffect(() => {
     if (!token) return;
     if (activeTab === "users") fetchUsers();
     if (activeTab === "papers") fetchPapers();
     if (activeTab === "questions") fetchPapers();
+    if (activeTab === "lessons") fetchLessons();
     if (activeTab === "subscriptions") fetchSubscriptions();
   }, [activeTab, token]);
 
   const headers = { Authorization: `Bearer ${token}` };
 
   const fetchStats = async () => {
-  setLoading(true);
-  try {
-    const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
-    if (res.status === 403) {
-      router.push("/");
-      return;
-    }
-    const data = await res.json();
-    if (data.success) setStats(data.data);
-    else setError(data.error);
-  } catch { setError("Cannot connect to server."); }
-  finally { setLoading(false); }
-};
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
+      if (res.status === 403) {
+        router.push("/");
+        return;
+      }
+      const data = await res.json();
+      if (data.success) setStats(data.data);
+      else setError(data.error);
+    } catch { setError("Cannot connect to server."); }
+    finally { setLoading(false); }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -90,6 +98,17 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) setQuestions(data.data);
     } catch { setError("Failed to load questions."); }
+  };
+
+  const fetchLessons = async (topicId?: string) => {
+    try {
+      const url = topicId
+        ? `http://localhost:5000/api/admin/lessons?topicId=${topicId}`
+        : "http://localhost:5000/api/admin/lessons";
+      const res = await fetch(url, { headers });
+      const data = await res.json();
+      if (data.success) setLessons(data.data);
+    } catch { setError("Failed to load lessons."); }
   };
 
   const fetchSubscriptions = async () => {
@@ -163,6 +182,36 @@ export default function AdminPage() {
     } catch { setFormError("Failed to add question."); }
   };
 
+  const handleAddLesson = async () => {
+    setFormError("");
+    setFormMessage("");
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/lessons", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...lessonForm,
+          orderIndex: parseInt(String(lessonForm.orderIndex)),
+          estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Lesson added successfully!");
+        fetchLessons(lessonForm.topicId || undefined);
+        setLessonForm((prev) => ({
+          ...prev,
+          title: "",
+          content: "",
+          videoUrl: "",
+          orderIndex: prev.orderIndex + 1,
+        }));
+      } else {
+        setFormError(data.error);
+      }
+    } catch { setFormError("Failed to add lesson."); }
+  };
+
   const handleDeletePaper = async (id: string) => {
     if (!confirm("Delete this paper and all its questions?")) return;
     try {
@@ -177,6 +226,14 @@ export default function AdminPage() {
       await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers });
       if (questionForm.paperId) fetchQuestions(questionForm.paperId);
     } catch { setError("Failed to delete question."); }
+  };
+
+  const handleDeleteLesson = async (id: string) => {
+    if (!confirm("Delete this lesson?")) return;
+    try {
+      await fetch(`http://localhost:5000/api/admin/lessons/${id}`, { method: "DELETE", headers });
+      fetchLessons();
+    } catch { setError("Failed to delete lesson."); }
   };
 
   const handleActivateSubscription = async (userId: string, plan: string) => {
@@ -199,6 +256,7 @@ export default function AdminPage() {
     { id: "stats", label: "📊 Dashboard" },
     { id: "papers", label: "📄 Papers" },
     { id: "questions", label: "❓ Questions" },
+    { id: "lessons", label: "📚 Lessons" },
     { id: "users", label: "👥 Users" },
     { id: "subscriptions", label: "💳 Subscriptions" },
   ];
@@ -333,8 +391,6 @@ export default function AdminPage() {
         {/* PAPERS TAB */}
         {activeTab === "papers" && (
           <div className="space-y-6">
-
-            {/* Add Paper Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Paper</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -388,7 +444,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Papers List */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">📄 All Papers ({papers.length})</h2>
               <div className="overflow-x-auto">
@@ -436,12 +491,9 @@ export default function AdminPage() {
         {/* QUESTIONS TAB */}
         {activeTab === "questions" && (
           <div className="space-y-6">
-
-            {/* Add Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Question</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Paper</label>
                   <select
@@ -458,7 +510,6 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
                   <select
@@ -472,7 +523,6 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Number</label>
                   <input
@@ -482,7 +532,6 @@ export default function AdminPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Marks</label>
                   <input
@@ -492,7 +541,6 @@ export default function AdminPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Difficulty</label>
                   <select
@@ -505,7 +553,6 @@ export default function AdminPage() {
                     <option value="hard">Hard</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Correct Answer</label>
                   <input
@@ -516,7 +563,6 @@ export default function AdminPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
                   />
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Text</label>
                   <textarea
@@ -527,8 +573,6 @@ export default function AdminPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none"
                   />
                 </div>
-
-                {/* Image Upload */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Question Diagram / Image{" "}
@@ -561,7 +605,6 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Solution / Working</label>
                   <textarea
@@ -572,7 +615,6 @@ export default function AdminPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none"
                   />
                 </div>
-
                 <div className="flex gap-6">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input
@@ -593,9 +635,7 @@ export default function AdminPage() {
                     Daily challenge eligible
                   </label>
                 </div>
-
               </div>
-
               <button
                 onClick={handleAddQuestion}
                 className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
@@ -604,47 +644,164 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Questions List */}
             {questions.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">
-                  ❓ Questions ({questions.length})
-                </h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">❓ Questions ({questions.length})</h2>
                 <div className="space-y-3">
                   {questions.map((q: any) => (
                     <div key={q.id} className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl">
                       <div className="flex-1 min-w-0">
                         <div className="flex gap-2 mb-1 flex-wrap">
-                          <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">
-                            Q{q.questionNumber}
-                          </span>
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">
-                            {q.difficulty}
-                          </span>
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">
-                            {q.marks} marks
-                          </span>
-                          {q.isFree && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>
-                          )}
-                          {q.questionImageUrl && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Has image</span>
-                          )}
+                          <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">Q{q.questionNumber}</span>
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">{q.difficulty}</span>
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{q.marks} marks</span>
+                          {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
+                          {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Has image</span>}
                         </div>
                         <p className="text-sm text-gray-800 line-clamp-2">{q.questionText}</p>
                         {q.questionImageUrl && (
-                          <img
-                            src={q.questionImageUrl}
-                            alt="Question diagram"
-                            className="mt-2 max-w-xs max-h-32 rounded-lg border border-gray-200 object-contain"
-                          />
+                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-xs max-h-32 rounded-lg border border-gray-200 object-contain" />
                         )}
-                        {q.correctAnswer && (
-                          <p className="text-xs text-green-600 mt-1">Answer: {q.correctAnswer}</p>
-                        )}
+                        {q.correctAnswer && <p className="text-xs text-green-600 mt-1">Answer: {q.correctAnswer}</p>}
+                      </div>
+                      <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* LESSONS TAB */}
+        {activeTab === "lessons" && (
+          <div className="space-y-6">
+
+            {/* Add Lesson Form */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Lesson</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
+                  <select
+                    value={lessonForm.topicId}
+                    onChange={(e) => {
+                      setLessonForm({ ...lessonForm, topicId: e.target.value });
+                      if (e.target.value) fetchLessons(e.target.value);
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="">Select a topic...</option>
+                    {topics.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Title</label>
+                  <input
+                    type="text"
+                    value={lessonForm.title}
+                    onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
+                    placeholder="e.g. Introduction to Algebra"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Order</label>
+                  <input
+                    type="number"
+                    value={lessonForm.orderIndex}
+                    onChange={(e) => setLessonForm({ ...lessonForm, orderIndex: parseInt(e.target.value) })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Estimated Minutes</label>
+                  <input
+                    type="number"
+                    value={lessonForm.estimatedMinutes}
+                    onChange={(e) => setLessonForm({ ...lessonForm, estimatedMinutes: parseInt(e.target.value) })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    YouTube Video URL <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lessonForm.videoUrl}
+                    onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
+                    placeholder="e.g. https://www.youtube.com/watch?v=..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Paste a YouTube link — it will be embedded on the topic page</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Content</label>
+                  <textarea
+                    value={lessonForm.content}
+                    onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
+                    placeholder="Enter lesson content. You can use basic HTML for formatting e.g. <b>bold</b>, <br> for line breaks..."
+                    rows={8}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Supports basic HTML: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;br&gt; line break, &lt;ul&gt;&lt;li&gt;lists&lt;/li&gt;&lt;/ul&gt;
+                  </p>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={lessonForm.isFree}
+                      onChange={(e) => setLessonForm({ ...lessonForm, isFree: e.target.checked })}
+                      className="w-4 h-4 accent-brand-600"
+                    />
+                    Free lesson
+                  </label>
+                </div>
+
+              </div>
+
+              <button
+                onClick={handleAddLesson}
+                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
+              >
+                Add Lesson
+              </button>
+            </div>
+
+            {/* Lessons List */}
+            {lessons.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-4">📚 Lessons ({lessons.length})</h2>
+                <div className="space-y-3">
+                  {lessons.map((lesson: any) => (
+                    <div key={lesson.id} className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex gap-2 mb-1 flex-wrap">
+                          <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">#{lesson.orderIndex}</span>
+                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{lesson.estimatedMinutes} min</span>
+                          {lesson.videoUrl && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">🎥 Video</span>}
+                          {lesson.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{lesson.topic?.name}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-800">{lesson.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
+                          {lesson.content?.replace(/<[^>]*>/g, "").substring(0, 80)}...
+                        </p>
                       </div>
                       <button
-                        onClick={() => handleDeleteQuestion(q.id)}
+                        onClick={() => handleDeleteLesson(lesson.id)}
                         className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0"
                       >
                         Delete
@@ -697,9 +854,7 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="py-3 text-gray-500">
-                        {new Date(u.createdAt).toLocaleDateString("en-GB", {
-                          day: "numeric", month: "short",
-                        })}
+                        {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </td>
                       <td className="py-3">
                         <select
@@ -719,9 +874,7 @@ export default function AdminPage() {
                     </tr>
                   ))}
                   {users.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400">No users yet</td>
-                    </tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No users yet</td></tr>
                   )}
                 </tbody>
               </table>
@@ -732,9 +885,7 @@ export default function AdminPage() {
         {/* SUBSCRIPTIONS TAB */}
         {activeTab === "subscriptions" && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">
-              💳 All Subscriptions ({subscriptions.length})
-            </h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-4">💳 All Subscriptions ({subscriptions.length})</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -765,17 +916,13 @@ export default function AdminPage() {
                       </td>
                       <td className="py-3 text-gray-500">${s.amountUsd}</td>
                       <td className="py-3 text-gray-500">
-                        {new Date(s.expiresAt).toLocaleDateString("en-GB", {
-                          day: "numeric", month: "short", year: "numeric",
-                        })}
+                        {new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                       </td>
                       <td className="py-3 text-gray-400 text-xs font-mono">{s.paymentReference}</td>
                     </tr>
                   ))}
                   {subscriptions.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400">No subscriptions yet</td>
-                    </tr>
+                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No subscriptions yet</td></tr>
                   )}
                 </tbody>
               </table>

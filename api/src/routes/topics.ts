@@ -47,4 +47,47 @@ router.get('/:slug', async (req, res) => {
   }
 });
 
+// GET lessons for a topic by slug
+router.get("/:slug/lessons", async (req, res) => {
+  try {
+    const topic = await prisma.topic.findUnique({
+      where: { slug: req.params.slug },
+    });
+
+    if (!topic) {
+      return res.status(404).json({
+        success: false,
+        error: "Topic not found",
+      });
+    }
+
+    const lessons = await prisma.lesson.findMany({
+      where: { topicId: topic.id },
+      orderBy: { orderIndex: "asc" },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        orderIndex: true,
+        isFree: true,
+        estimatedMinutes: true,
+        videoUrl: true,
+        publishedAt: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      count: lessons.length,
+      data: lessons,
+    });
+  } catch (error) {
+    console.error("Lessons fetch error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch lessons",
+    });
+  }
+});
+
 export default router;

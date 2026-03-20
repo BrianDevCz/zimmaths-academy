@@ -107,6 +107,7 @@ model Lesson {
   orderIndex       Int
   isFree           Boolean  @default(false)
   estimatedMinutes Int      @default(10)
+  videoUrl         String?
   publishedAt      DateTime @default(now())
 
   topic    Topic                @relation(fields: [topicId], references: [id])

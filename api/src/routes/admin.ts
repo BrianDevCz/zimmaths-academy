@@ -287,4 +287,78 @@ router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Resp
   }
 });
 
+// GET /api/admin/lessons
+router.get("/lessons", async (req: AuthRequest, res: Response) => {
+  try {
+    const { topicId } = req.query;
+    const where = topicId ? { topicId: String(topicId) } : {};
+
+    const lessons = await prisma.lesson.findMany({
+      where,
+      orderBy: { orderIndex: "asc" },
+      include: {
+        topic: { select: { name: true, slug: true } },
+      },
+    });
+
+    return res.status(200).json({ success: true, data: lessons });
+  } catch (error) {
+    console.error("Admin lessons error:", error);
+    return res.status(500).json({ success: false, error: "Failed to load lessons." });
+  }
+});
+
+// POST /api/admin/lessons
+router.post("/lessons", async (req: AuthRequest, res: Response) => {
+  try {
+    const schema = z.object({
+      topicId: z.string().min(1, "Topic is required"),
+      title: z.string().min(1, "Title is required"),
+      content: z.string().min(1, "Content is required"),
+      orderIndex: z.number().int().min(1),
+      isFree: z.boolean().default(false),
+      estimatedMinutes: z.number().int().min(1).default(10),
+      videoUrl: z.string().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
+    }
+
+    const lesson = await prisma.lesson.create({ data: parsed.data });
+
+    return res.status(201).json({ success: true, data: lesson });
+  } catch (error) {
+    console.error("Admin create lesson error:", error);
+    return res.status(500).json({ success: false, error: "Failed to create lesson." });
+  }
+});
+
+// PUT /api/admin/lessons/:id
+router.put("/lessons/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    const lesson = await prisma.lesson.update({
+      where: { id: String(req.params.id) },
+      data: req.body,
+    });
+
+    return res.status(200).json({ success: true, data: lesson });
+  } catch (error) {
+    console.error("Admin update lesson error:", error);
+    return res.status(500).json({ success: false, error: "Failed to update lesson." });
+  }
+});
+
+// DELETE /api/admin/lessons/:id
+router.delete("/lessons/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.lesson.delete({ where: { id: String(req.params.id) } });
+    return res.status(200).json({ success: true, message: "Lesson deleted." });
+  } catch (error) {
+    console.error("Admin delete lesson error:", error);
+    return res.status(500).json({ success: false, error: "Failed to delete lesson." });
+  }
+});
+
 export default router;
