@@ -1,4 +1,9 @@
+"use client";
+import { useAuth } from "../context/AuthContext";
+
 export default function Footer() {
+  const { user } = useAuth();
+
   return (
     <footer className="bg-brand-900 text-brand-200 py-12 px-6">
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -19,7 +24,7 @@ export default function Footer() {
         <div>
           <h4 className="text-white font-semibold mb-3">Study</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="/papers" className="hover:text-white transition">Past Papers</a></li>
+            <li><a href="/papers" className="hover:text-white transition">Practice Papers</a></li>
             <li><a href="/topics" className="hover:text-white transition">All Topics</a></li>
             <li><a href="/practice" className="hover:text-white transition">Practice Mode</a></li>
             <li><a href="/leaderboard" className="hover:text-white transition">Leaderboard</a></li>
@@ -30,9 +35,19 @@ export default function Footer() {
         <div>
           <h4 className="text-white font-semibold mb-3">Account</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="/register" className="hover:text-white transition">Register Free</a></li>
-            <li><a href="/login" className="hover:text-white transition">Login</a></li>
-            <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
+            {user ? (
+              <>
+                <li><a href="/profile" className="hover:text-white transition">My Profile</a></li>
+                <li><a href="/dashboard" className="hover:text-white transition">Dashboard</a></li>
+                <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
+              </>
+            ) : (
+              <>
+                <li><a href="/register" className="hover:text-white transition">Register Free</a></li>
+                <li><a href="/login" className="hover:text-white transition">Login</a></li>
+                <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
+              </>
+            )}
           </ul>
         </div>
 
@@ -40,7 +55,7 @@ export default function Footer() {
 
       {/* Bottom Bar */}
       <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-brand-800 flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-sm text-brand-400">© 2025 ZimMaths Academy · zimmaths.com</p>
+        <p className="text-sm text-brand-400">© 2026 ZimMaths Academy · zimmaths.com</p>
         <p className="text-sm text-brand-400">Built for Zimbabwe's O-Level students 🇿🇼</p>
       </div>
 

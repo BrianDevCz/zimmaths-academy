@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -27,6 +27,8 @@ export default function AdminPage() {
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   // Paper form
   const [paperForm, setPaperForm] = useState({
@@ -46,15 +48,9 @@ export default function AdminPage() {
     isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "",
   });
 
-  // Helper function to always get fresh headers with the latest token
   const getHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("zim_token")}`,
-  "Content-Type": "application/json"
-});
-
-  // Helper function to get headers without Content-Type (for file uploads)
-  const getAuthHeaders = () => ({
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${localStorage.getItem("zim_token")}`,
+    "Content-Type": "application/json"
   });
 
   useEffect(() => {
@@ -63,10 +59,9 @@ export default function AdminPage() {
       router.push("/login?redirect=/admin");
       return;
     }
-
     fetchStats();
     fetchTopics();
-  }, [token, authLoading, user]);
+  }, [token, authLoading]);
 
   useEffect(() => {
     if (!token) return;
@@ -152,8 +147,7 @@ export default function AdminPage() {
     setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/papers", {
-        method: "POST",
-        headers: getHeaders(),
+        method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...paperForm,
           year: parseInt(String(paperForm.year)),
@@ -173,8 +167,7 @@ export default function AdminPage() {
     setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/questions", {
-        method: "POST",
-        headers: getHeaders(),
+        method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...questionForm,
           paperId: questionForm.paperId || null,
@@ -190,21 +183,62 @@ export default function AdminPage() {
         setQuestionForm((prev) => ({
           ...prev,
           questionNumber: prev.questionNumber + 1,
-          questionText: "",
-          correctAnswer: "",
-          solutionText: "",
-          questionImageUrl: "",
+          questionText: "", correctAnswer: "", solutionText: "", questionImageUrl: "",
         }));
       } else { setFormError(data.error); }
     } catch { setFormError("Failed to add question."); }
+  };
+
+  const handleEditQuestion = (q: any) => {
+    setEditingQuestionId(q.id);
+    setQuestionForm({
+      paperId: q.paperId || "",
+      topicId: q.topicId || "",
+      questionNumber: q.questionNumber,
+      questionText: q.questionText,
+      marks: q.marks,
+      difficulty: q.difficulty,
+      correctAnswer: q.correctAnswer || "",
+      solutionText: q.solutionText || "",
+      isFree: q.isFree,
+      isDailyEligible: q.isDailyEligible,
+      questionImageUrl: q.questionImageUrl || "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleUpdateQuestion = async () => {
+    setFormError(""); setFormMessage("");
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/questions/${editingQuestionId}`, {
+        method: "PUT", headers: getHeaders(),
+        body: JSON.stringify({
+          ...questionForm,
+          paperId: questionForm.paperId || null,
+          questionNumber: parseInt(String(questionForm.questionNumber)),
+          marks: parseInt(String(questionForm.marks)),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Question updated successfully!");
+        setEditingQuestionId(null);
+        setQuestionForm({
+          paperId: "", topicId: "", questionNumber: 1, questionText: "",
+          marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "",
+          isFree: false, isDailyEligible: false, questionImageUrl: "",
+        });
+        if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+        fetchPracticeQuestions();
+      } else { setFormError(data.error); }
+    } catch { setFormError("Failed to update question."); }
   };
 
   const handleAddLesson = async () => {
     setFormError(""); setFormMessage("");
     try {
       const res = await fetch("http://localhost:5000/api/admin/lessons", {
-        method: "POST",
-        headers: getHeaders(),
+        method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...lessonForm,
           orderIndex: parseInt(String(lessonForm.orderIndex)),
@@ -216,10 +250,50 @@ export default function AdminPage() {
         setFormMessage("Lesson added successfully!");
         fetchLessons(lessonForm.topicId || undefined);
         setLessonForm((prev) => ({
-          ...prev, title: "", content: "", videoUrl: "", orderIndex: prev.orderIndex + 1,
+          ...prev, title: "", content: "", videoUrl: "", imageUrl: "", orderIndex: prev.orderIndex + 1,
         }));
       } else { setFormError(data.error); }
     } catch { setFormError("Failed to add lesson."); }
+  };
+
+  const handleEditLesson = (lesson: any) => {
+    setEditingLessonId(lesson.id);
+    setLessonForm({
+      topicId: lesson.topicId || "",
+      title: lesson.title,
+      content: lesson.content,
+      orderIndex: lesson.orderIndex,
+      isFree: lesson.isFree,
+      estimatedMinutes: lesson.estimatedMinutes,
+      videoUrl: lesson.videoUrl || "",
+      geogebraUrl: lesson.geogebraUrl || "",
+      imageUrl: lesson.imageUrl || "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleUpdateLesson = async () => {
+    setFormError(""); setFormMessage("");
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/lessons/${editingLessonId}`, {
+        method: "PUT", headers: getHeaders(),
+        body: JSON.stringify({
+          ...lessonForm,
+          orderIndex: parseInt(String(lessonForm.orderIndex)),
+          estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Lesson updated successfully!");
+        setEditingLessonId(null);
+        setLessonForm({
+          topicId: "", title: "", content: "", orderIndex: 1,
+          isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "",
+        });
+        fetchLessons();
+      } else { setFormError(data.error); }
+    } catch { setFormError("Failed to update lesson."); }
   };
 
   const handleDeletePaper = async (id: string) => {
@@ -290,56 +364,36 @@ export default function AdminPage() {
   };
 
   const handleBatchImport = async () => {
-    // Check token first
-    if (!token) {
-      setFormError("You must be logged in to import questions.");
-      return;
-    }
-
+    if (!token) { setFormError("You must be logged in to import questions."); return; }
     setImportLoading(true);
     setImportResult(null);
-    
     try {
       const res = await fetch("http://localhost:5000/api/admin/questions/import", {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ questions: csvPreview }),
       });
-      
-      console.log("Import response status:", res.status);
-      
-      // Check if response is ok
       if (!res.ok) {
         const text = await res.text();
-        console.error("Server error response:", text.substring(0, 200));
         throw new Error(`Server error ${res.status}: ${text.substring(0, 100)}`);
       }
-      
       const data = await res.json();
-      console.log("Import data:", data);
-      
       if (data.success) {
         setImportResult(data.data);
         setCsvPreview([]);
         fetchPracticeQuestions();
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
         setFormMessage(`Successfully imported ${data.data.imported} questions!`);
-      } else {
-        setFormError(data.error || "Import failed");
-      }
+      } else { setFormError(data.error || "Import failed"); }
     } catch (err: any) {
-      console.error("Import error:", err);
       setFormError("Failed to import questions: " + (err?.message || "Unknown error"));
-    } finally {
-      setImportLoading(false);
-    }
+    } finally { setImportLoading(false); }
   };
 
   const handleActivateSubscription = async (userId: string, plan: string) => {
     try {
       const res = await fetch(`http://localhost:5000/api/admin/subscriptions/${userId}/activate`, {
-        method: "PUT",
-        headers: getHeaders(),
+        method: "PUT", headers: getHeaders(),
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
@@ -347,9 +401,7 @@ export default function AdminPage() {
         setFormMessage("Subscription activated!");
         fetchSubscriptions();
         fetchUsers();
-      } else {
-        setFormError(data.error);
-      }
+      } else { setFormError(data.error); }
     } catch { setError("Failed to activate subscription."); }
   };
 
@@ -391,15 +443,10 @@ export default function AdminPage() {
       <div className="bg-white border-b border-gray-200 px-6">
         <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
           {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition ${
-                activeTab === tab.id
-                  ? "border-brand-600 text-brand-700"
-                  : "border-transparent text-gray-500 hover:text-brand-600"
-              }`}
-            >
+                activeTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-brand-600"
+              }`}>
               {tab.label}
             </button>
           ))}
@@ -408,15 +455,9 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {error}</div>
-        )}
-        {formMessage && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm">✅ {formMessage}</div>
-        )}
-        {formError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {formError}</div>
-        )}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {error}</div>}
+        {formMessage && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm">✅ {formMessage}</div>}
+        {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {formError}</div>}
 
         {/* STATS TAB */}
         {activeTab === "stats" && stats && (
@@ -456,9 +497,7 @@ export default function AdminPage() {
                         <td className="py-3 text-gray-500">{u.email}</td>
                         <td className="py-3 text-gray-500 capitalize">{u.grade?.replace("form", "Form ")}</td>
                         <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                            {u.role}
-                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{u.role}</span>
                         </td>
                         <td className="py-3 text-gray-500">
                           {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
@@ -557,11 +596,8 @@ export default function AdminPage() {
               <h2 className="text-lg font-bold text-gray-800 mb-1">📥 Batch Import Questions</h2>
               <p className="text-sm text-gray-500 mb-4">
                 Upload a CSV to add multiple questions at once.{" "}
-                <button onClick={downloadTemplate} className="text-brand-600 hover:underline text-sm font-semibold">
-                  Download template
-                </button>
+                <button onClick={downloadTemplate} className="text-brand-600 hover:underline text-sm font-semibold">Download template</button>
               </p>
-
               <div className="bg-gray-50 rounded-lg p-3 mb-4 text-xs text-gray-500 space-y-1">
                 <p className="font-semibold text-gray-700">CSV Column Guide:</p>
                 <p><span className="font-mono bg-white px-1 rounded">topicSlug</span> — e.g. general-arithmetic, algebra, geometry</p>
@@ -572,19 +608,11 @@ export default function AdminPage() {
                 <p><span className="font-mono bg-white px-1 rounded">questionImageUrl</span> — Uploadcare URL or leave blank</p>
                 <p><span className="font-mono bg-white px-1 rounded">paperTitle</span> — exact paper title or leave blank for practice-only</p>
               </div>
-
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleCsvImport}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
-              />
-
+              <input type="file" accept=".csv" onChange={handleCsvImport}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer" />
               {csvPreview.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-2">
-                    Preview — {csvPreview.length} questions ready to import:
-                  </p>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Preview — {csvPreview.length} questions ready to import:</p>
                   <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
                     {csvPreview.slice(0, 5).map((q: any, i: number) => (
                       <div key={i} className="text-xs bg-gray-50 rounded px-3 py-2 flex gap-2 items-center">
@@ -592,113 +620,75 @@ export default function AdminPage() {
                         <span className="text-gray-400 w-6 flex-shrink-0">Q{q.questionNumber}</span>
                         <span className="text-gray-600 truncate flex-1">{q.questionText}</span>
                         <span className="text-gray-400 flex-shrink-0">{q.marks}m</span>
-                        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs ${
-                          q.difficulty === "easy" ? "bg-green-100 text-green-700" :
-                          q.difficulty === "hard" ? "bg-red-100 text-red-700" :
-                          "bg-yellow-100 text-yellow-700"
-                        }`}>{q.difficulty}</span>
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs ${q.difficulty === "easy" ? "bg-green-100 text-green-700" : q.difficulty === "hard" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{q.difficulty}</span>
                       </div>
                     ))}
-                    {csvPreview.length > 5 && (
-                      <p className="text-xs text-gray-400 text-center py-1">
-                        ...and {csvPreview.length - 5} more questions
-                      </p>
-                    )}
+                    {csvPreview.length > 5 && <p className="text-xs text-gray-400 text-center py-1">...and {csvPreview.length - 5} more questions</p>}
                   </div>
                   <div className="flex gap-3">
-                    <button
-                      onClick={handleBatchImport}
-                      disabled={importLoading}
-                      className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
-                    >
+                    <button onClick={handleBatchImport} disabled={importLoading}
+                      className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
                       {importLoading ? "Importing..." : `Import ${csvPreview.length} Questions`}
                     </button>
-                    <button
-                      onClick={() => { setCsvPreview([]); setImportResult(null); }}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold transition"
-                    >
-                      Cancel
-                    </button>
+                    <button onClick={() => { setCsvPreview([]); setImportResult(null); }}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold transition">Cancel</button>
                   </div>
                 </div>
               )}
-
               {importResult && (
-                <div className={`mt-3 px-4 py-3 rounded-lg text-sm ${
-                  importResult.failed > 0 ? "bg-yellow-50 border border-yellow-200 text-yellow-700" 
-                  : "bg-green-50 border border-green-200 text-green-700"
-                }`}>
+                <div className={`mt-3 px-4 py-3 rounded-lg text-sm ${importResult.failed > 0 ? "bg-yellow-50 border border-yellow-200 text-yellow-700" : "bg-green-50 border border-green-200 text-green-700"}`}>
                   <p className="font-semibold">✅ {importResult.imported} questions imported successfully{importResult.failed > 0 ? `, ⚠️ ${importResult.failed} failed` : ""}</p>
-                  {importResult.errors?.map((e: string, i: number) => (
-                    <p key={i} className="text-xs mt-1">{e}</p>
-                  ))}
+                  {importResult.errors?.map((e: string, i: number) => <p key={i} className="text-xs mt-1">{e}</p>)}
                 </div>
               )}
             </div>
 
-            {/* Add Question Form */}
+            {/* Add / Edit Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Question</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">
+                {editingQuestionId ? "✏️ Edit Question" : "➕ Add New Question"}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Paper <span className="text-gray-400 font-normal text-xs">(optional — leave blank for practice-only)</span>
                   </label>
-                  <select
-                    value={questionForm.paperId}
-                    onChange={(e) => {
-                      setQuestionForm({ ...questionForm, paperId: e.target.value });
-                      if (e.target.value) fetchQuestions(e.target.value);
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                  <select value={questionForm.paperId}
+                    onChange={(e) => { setQuestionForm({ ...questionForm, paperId: e.target.value }); if (e.target.value) fetchQuestions(e.target.value); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">No paper — Practice question only</option>
-                    {papers.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
+                    {papers.map((p: any) => <option key={p.id} value={p.id}>{p.title}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
-                  <select
-                    value={questionForm.topicId}
-                    onChange={(e) => setQuestionForm({ ...questionForm, topicId: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
-                  >
+                  <select value={questionForm.topicId} onChange={(e) => setQuestionForm({ ...questionForm, topicId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">Select a topic...</option>
-                    {topics.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
+                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Number</label>
                   <input type="number" value={questionForm.questionNumber}
                     onChange={(e) => setQuestionForm({ ...questionForm, questionNumber: parseInt(e.target.value) })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Marks</label>
                   <input type="number" value={questionForm.marks}
                     onChange={(e) => setQuestionForm({ ...questionForm, marks: parseInt(e.target.value) })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Difficulty</label>
-                  <select value={questionForm.difficulty}
-                    onChange={(e) => setQuestionForm({ ...questionForm, difficulty: e.target.value })}
+                  <select value={questionForm.difficulty} onChange={(e) => setQuestionForm({ ...questionForm, difficulty: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Correct Answer</label>
                   <input type="text" value={questionForm.correctAnswer}
@@ -706,20 +696,14 @@ export default function AdminPage() {
                     placeholder="e.g. 13 or $x = 3$ or $\frac{2}{3}$"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 font-mono" />
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Text</label>
-                  <textarea
-                    value={questionForm.questionText}
+                  <textarea value={questionForm.questionText}
                     onChange={(e) => setQuestionForm({ ...questionForm, questionText: e.target.value })}
                     placeholder="e.g. Simplify $2\frac{1}{2} \div 3\frac{3}{4} + 1\frac{1}{5}$"
-                    rows={3}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono"
-                  />
+                    rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                   <LatexCheatSheet />
                 </div>
-
-                {/* Preview */}
                 {questionForm.questionText && (
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Preview</label>
@@ -728,63 +712,51 @@ export default function AdminPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Image Upload */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Question Diagram / Image <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
-                  <LR.FileUploaderRegular
-                    pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""}
-                    imgOnly={true}
-                    multiple={false}
-                    onFileUploadSuccess={(file: any) => {
-                      setQuestionForm({ ...questionForm, questionImageUrl: file.cdnUrl });
-                      setFormMessage("Image uploaded successfully!");
-                    }}
-                    onFileUploadFailed={() => setFormError("Image upload failed.")}
-                  />
+                  <LR.FileUploaderRegular pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""} imgOnly={true} multiple={false}
+                    onFileUploadSuccess={(file: any) => { setQuestionForm({ ...questionForm, questionImageUrl: file.cdnUrl }); setFormMessage("Image uploaded!"); }}
+                    onFileUploadFailed={() => setFormError("Image upload failed.")} />
                   {questionForm.questionImageUrl && (
                     <div className="mt-3">
                       <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
-                      <img src={questionForm.questionImageUrl} alt="Question diagram"
-                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
-                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })}
-                        className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
+                      <img src={questionForm.questionImageUrl} alt="Question diagram" className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
+                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })} className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
                     </div>
                   )}
                 </div>
-
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Solution / Working</label>
                   <textarea value={questionForm.solutionText}
                     onChange={(e) => setQuestionForm({ ...questionForm, solutionText: e.target.value })}
                     placeholder="Enter the full solution with working... LaTeX supported: $\frac{n}{2}$"
-                    rows={4}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
+                    rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                 </div>
-
                 <div className="flex gap-6 flex-wrap">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={questionForm.isFree}
-                      onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600" />
+                    <input type="checkbox" checked={questionForm.isFree} onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" />
                     Free question
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={questionForm.isDailyEligible}
-                      onChange={(e) => setQuestionForm({ ...questionForm, isDailyEligible: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600" />
+                    <input type="checkbox" checked={questionForm.isDailyEligible} onChange={(e) => setQuestionForm({ ...questionForm, isDailyEligible: e.target.checked })} className="w-4 h-4 accent-brand-600" />
                     Daily challenge eligible
                   </label>
                 </div>
-
               </div>
-
-              <button onClick={handleAddQuestion}
-                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
-                Add Question
-              </button>
+              <div className="mt-4 flex gap-3">
+                <button onClick={editingQuestionId ? handleUpdateQuestion : handleAddQuestion}
+                  className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
+                  {editingQuestionId ? "Update Question" : "Add Question"}
+                </button>
+                {editingQuestionId && (
+                  <button onClick={() => {
+                    setEditingQuestionId(null);
+                    setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "" });
+                  }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
+                )}
+              </div>
             </div>
 
             {/* Paper Questions List */}
@@ -803,17 +775,17 @@ export default function AdminPage() {
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Image</span>}
                         </div>
-                        <div className="text-sm text-gray-800">
-                          <MathContent>{q.questionText || ""}</MathContent>
-                        </div>
+                        <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.correctAnswer && (
                           <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
-                            <span>Answer:</span>
-                            <MathContent>{q.correctAnswer}</MathContent>
+                            <span>Answer:</span><MathContent>{q.correctAnswer}</MathContent>
                           </div>
                         )}
                       </div>
-                      <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
+                        <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -822,13 +794,9 @@ export default function AdminPage() {
 
             {/* Practice-Only Questions List */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">
-                ✏️ Practice-Only Questions ({practiceQuestions.length})
-              </h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice-Only Questions ({practiceQuestions.length})</h2>
               {practiceQuestions.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-6">
-                  No practice-only questions yet. Add a question without selecting a paper.
-                </p>
+                <p className="text-gray-400 text-sm text-center py-6">No practice-only questions yet. Add a question without selecting a paper.</p>
               ) : (
                 <div className="space-y-3">
                   {practiceQuestions.map((q: any) => (
@@ -842,17 +810,17 @@ export default function AdminPage() {
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily eligible</span>}
                         </div>
-                        <div className="text-sm text-gray-800">
-                          <MathContent>{q.questionText || ""}</MathContent>
-                        </div>
+                        <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.correctAnswer && (
                           <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
-                            <span>Answer:</span>
-                            <MathContent>{q.correctAnswer}</MathContent>
+                            <span>Answer:</span><MathContent>{q.correctAnswer}</MathContent>
                           </div>
                         )}
                       </div>
-                      <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
+                        <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -866,7 +834,9 @@ export default function AdminPage() {
         {activeTab === "lessons" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Lesson</h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">
+                {editingLessonId ? "✏️ Edit Lesson" : "➕ Add New Lesson"}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
@@ -874,84 +844,70 @@ export default function AdminPage() {
                     onChange={(e) => { setLessonForm({ ...lessonForm, topicId: e.target.value }); if (e.target.value) fetchLessons(e.target.value); }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">Select a topic...</option>
-                    {topics.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Title</label>
-                  <input type="text" value={lessonForm.title}
-                    onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
+                  <input type="text" value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
                     placeholder="e.g. Introduction to Algebra"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Order</label>
-                  <input type="number" value={lessonForm.orderIndex}
-                    onChange={(e) => setLessonForm({ ...lessonForm, orderIndex: parseInt(e.target.value) })}
+                  <input type="number" value={lessonForm.orderIndex} onChange={(e) => setLessonForm({ ...lessonForm, orderIndex: parseInt(e.target.value) })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Estimated Minutes</label>
-                  <input type="number" value={lessonForm.estimatedMinutes}
-                    onChange={(e) => setLessonForm({ ...lessonForm, estimatedMinutes: parseInt(e.target.value) })}
+                  <input type="number" value={lessonForm.estimatedMinutes} onChange={(e) => setLessonForm({ ...lessonForm, estimatedMinutes: parseInt(e.target.value) })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    YouTube Video URL <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <input type="text" value={lessonForm.videoUrl}
-                    onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">YouTube Video URL <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input type="text" value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
                     placeholder="e.g. https://www.youtube.com/watch?v=..."
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
-
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Lesson Diagram / Image <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <LR.FileUploaderRegular
-                    pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""}
-                    imgOnly={true}
-                    multiple={false}
-                    onFileUploadSuccess={(file: any) => {
-                      setLessonForm({ ...lessonForm, imageUrl: file.cdnUrl });
-                      setFormMessage("Image uploaded successfully!");
-                    }}
-                    onFileUploadFailed={() => setFormError("Image upload failed.")}
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Diagram / Image <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <LR.FileUploaderRegular pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""} imgOnly={true} multiple={false}
+                    onFileUploadSuccess={(file: any) => { setLessonForm({ ...lessonForm, imageUrl: file.cdnUrl }); setFormMessage("Image uploaded!"); }}
+                    onFileUploadFailed={() => setFormError("Image upload failed.")} />
                   {lessonForm.imageUrl && (
                     <div className="mt-3">
                       <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
-                      <img src={lessonForm.imageUrl} alt="Lesson diagram"
-                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
-                      <button onClick={() => setLessonForm({ ...lessonForm, imageUrl: "" })}
-                        className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
+                      <img src={lessonForm.imageUrl} alt="Lesson diagram" className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
+                      <button onClick={() => setLessonForm({ ...lessonForm, imageUrl: "" })} className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
                     </div>
                   )}
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Content</label>
-                  <textarea value={lessonForm.content}
-                    onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
+                  <textarea value={lessonForm.content} onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
                     placeholder="Enter lesson content. Supports LaTeX math: $\frac{n}{2}$ and Markdown."
-                    rows={8}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
+                    rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                   <LatexCheatSheet />
                 </div>
                 <div>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={lessonForm.isFree}
-                      onChange={(e) => setLessonForm({ ...lessonForm, isFree: e.target.checked })}
-                      className="w-4 h-4 accent-brand-600" />
+                    <input type="checkbox" checked={lessonForm.isFree} onChange={(e) => setLessonForm({ ...lessonForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" />
                     Free lesson
                   </label>
                 </div>
               </div>
-              <button onClick={handleAddLesson}
-                className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
-                Add Lesson
-              </button>
+              <div className="mt-4 flex gap-3">
+                <button onClick={editingLessonId ? handleUpdateLesson : handleAddLesson}
+                  className="bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
+                  {editingLessonId ? "Update Lesson" : "Add Lesson"}
+                </button>
+                {editingLessonId && (
+                  <button onClick={() => {
+                    setEditingLessonId(null);
+                    setLessonForm({ topicId: "", title: "", content: "", orderIndex: 1, isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "" });
+                  }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
+                )}
+              </div>
             </div>
 
             {lessons.length > 0 && (
@@ -965,15 +921,17 @@ export default function AdminPage() {
                           <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">#{lesson.orderIndex}</span>
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{lesson.estimatedMinutes} min</span>
                           {lesson.videoUrl && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">🎥 Video</span>}
+                          {lesson.imageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">🖼️ Image</span>}
                           {lesson.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{lesson.topic?.name}</span>
                         </div>
                         <p className="text-sm font-semibold text-gray-800">{lesson.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
-                          {lesson.content?.replace(/<[^>]*>/g, "").substring(0, 80)}...
-                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{lesson.content?.replace(/<[^>]*>/g, "").substring(0, 80)}...</p>
                       </div>
-                      <button onClick={() => handleDeleteLesson(lesson.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <button onClick={() => handleEditLesson(lesson)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
+                        <button onClick={() => handleDeleteLesson(lesson.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1006,9 +964,7 @@ export default function AdminPage() {
                       <td className="py-3 text-gray-500">{u.email}</td>
                       <td className="py-3 text-gray-500 capitalize">{u.grade?.replace("form", "Form ")}</td>
                       <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                          {u.role}
-                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{u.role}</span>
                       </td>
                       <td className="py-3">
                         {u.subscription?.status === "active" ? (
@@ -1017,9 +973,7 @@ export default function AdminPage() {
                           <span className="text-xs text-gray-400">Free</span>
                         )}
                       </td>
-                      <td className="py-3 text-gray-500">
-                        {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                      </td>
+                      <td className="py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
                       <td className="py-3">
                         <select onChange={(e) => { if (e.target.value) handleActivateSubscription(u.id, e.target.value); e.target.value = ""; }}
                           className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600" defaultValue="">
@@ -1031,9 +985,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
-                  {users.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No users yet</td></tr>
-                  )}
+                  {users.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">No users yet</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1064,22 +1016,14 @@ export default function AdminPage() {
                       <td className="py-3 text-gray-500">{s.user?.email}</td>
                       <td className="py-3 text-gray-500 capitalize">{s.plan?.replace("_", " ")}</td>
                       <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          s.status === "active" ? "bg-green-100 text-green-700" :
-                          s.status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                          "bg-red-100 text-red-700"
-                        }`}>{s.status}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === "active" ? "bg-green-100 text-green-700" : s.status === "pending" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{s.status}</span>
                       </td>
                       <td className="py-3 text-gray-500">${s.amountUsd}</td>
-                      <td className="py-3 text-gray-500">
-                        {new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </td>
+                      <td className="py-3 text-gray-500">{new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                       <td className="py-3 text-gray-400 text-xs font-mono">{s.paymentReference}</td>
                     </tr>
                   ))}
-                  {subscriptions.length === 0 && (
-                    <tr><td colSpan={7} className="py-8 text-center text-gray-400">No subscriptions yet</td></tr>
-                  )}
+                  {subscriptions.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">No subscriptions yet</td></tr>}
                 </tbody>
               </table>
             </div>

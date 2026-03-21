@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Practice Papers — ZimMaths Academy",
+  description: "Original O-Level Mathematics practice papers with full step-by-step solutions. Covering all ZIMSEC topics.",
+};
+
 async function getPapers() {
   try {
     const res = await fetch('http://localhost:5000/api/papers', {

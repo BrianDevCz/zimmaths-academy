@@ -9,8 +9,23 @@ import 'katex/dist/katex.min.css';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ZimMaths Academy — O-Level Mathematics Portal",
-  description: "Zimbabwe's #1 ZIMSEC O-Level Mathematics study platform. Past papers, step-by-step solutions, AI tutor and daily challenges.",
+  title: "ZimMaths Academy — Pass O-Level Maths",
+  description: "Zimbabwe's #1 O-Level Mathematics study platform. Practice papers, step-by-step solutions, AI tutor and daily challenges. Built for ZIMSEC students.",
+  keywords: ["ZIMSEC", "O-Level Maths", "Zimbabwe", "Mathematics", "Past Papers", "Form 3", "Form 4"],
+  openGraph: {
+    title: "ZimMaths Academy — Pass O-Level Maths",
+    description: "Zimbabwe's #1 O-Level Mathematics study platform. Practice papers, AI tutor and daily challenges.",
+    url: "https://zimmaths.com",
+    siteName: "ZimMaths Academy",
+    locale: "en_ZW",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "ZimMaths Academy — Pass O-Level Maths",
+    description: "Zimbabwe's #1 O-Level Mathematics study platform.",
+  },
+  metadataBase: new URL("https://zimmaths.com"),
 };
 
 export default function RootLayout({
