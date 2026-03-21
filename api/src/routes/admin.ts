@@ -1,10 +1,11 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { AuthRequest } from "../middleware/auth";
+import { AuthRequest, requireAdmin } from "../middleware/auth";
 import { z } from "zod";
 
 const router = Router();
 const prisma = new PrismaClient();
+
 
 // GET /api/admin/stats
 router.get("/stats", async (req: AuthRequest, res: Response) => {
@@ -129,12 +130,10 @@ router.delete("/papers/:id", async (req: AuthRequest, res: Response) => {
   }
 });
 
-
 // GET /api/admin/questions
 // If paperId provided — return questions for that paper
 // If practiceOnly=true — return questions with no paper
 // If no filter — return all questions
-
 router.get("/questions", async (req: AuthRequest, res: Response) => {
   try {
     const { paperId, practiceOnly } = req.query;
@@ -197,6 +196,73 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Admin create question error:", error);
     return res.status(500).json({ success: false, error: "Failed to create question." });
+  }
+});
+
+// POST /api/admin/questions/import
+router.post("/questions/import", async (req: AuthRequest, res: Response) => {
+  try {
+    const { questions } = req.body;
+
+    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ success: false, error: "No questions provided." });
+    }
+
+    const results = { imported: 0, failed: 0, errors: [] as string[] };
+
+    for (const q of questions) {
+      try {
+        const topic = await prisma.topic.findUnique({
+          where: { slug: q.topicSlug },
+        });
+
+        if (!topic) {
+          results.failed++;
+          results.errors.push(`Q${q.questionNumber}: Topic "${q.topicSlug}" not found`);
+          continue;
+        }
+
+        // Look up paper by title if provided
+        let paperId = null;
+        if (q.paperTitle && q.paperTitle.trim()) {
+          const paper = await prisma.paper.findFirst({
+            where: { title: { contains: q.paperTitle.trim() } },
+          });
+          if (!paper) {
+            results.failed++;
+            results.errors.push(`Q${q.questionNumber}: Paper "${q.paperTitle}" not found`);
+            continue;
+          }
+          paperId = paper.id;
+        }
+
+        await prisma.question.create({
+          data: {
+            topicId: topic.id,
+            paperId,
+            questionNumber: parseInt(q.questionNumber),
+            questionText: q.questionText,
+            marks: parseInt(q.marks),
+            difficulty: q.difficulty || "medium",
+            correctAnswer: q.correctAnswer || "",
+            solutionText: q.solutionText || "",
+            isFree: q.isFree === "true" || q.isFree === true,
+            isDailyEligible: q.isDailyEligible === "true" || q.isDailyEligible === true,
+            questionImageUrl: q.questionImageUrl || null,
+          },
+        });
+
+        results.imported++;
+      } catch (err) {
+        results.failed++;
+        results.errors.push(`Q${q.questionNumber}: Failed to import`);
+      }
+    }
+
+    return res.status(200).json({ success: true, data: results });
+  } catch (error) {
+    console.error("Batch import error:", error);
+    return res.status(500).json({ success: false, error: "Batch import failed." });
   }
 });
 
@@ -318,6 +384,8 @@ router.post("/lessons", async (req: AuthRequest, res: Response) => {
       isFree: z.boolean().default(false),
       estimatedMinutes: z.number().int().min(1).default(10),
       videoUrl: z.string().optional(),
+      geogebraUrl: z.string().optional(),
+      imageUrl: z.string().optional(),
     });
 
     const parsed = schema.safeParse(req.body);

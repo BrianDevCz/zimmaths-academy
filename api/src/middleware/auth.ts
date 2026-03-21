@@ -107,7 +107,6 @@ export const requirePremium = async (
       error: "Invalid or expired session. Please log in again.",
     });
   }
-
 };
 
 export const requireAdmin = async (
@@ -151,7 +150,7 @@ export const requireAdmin = async (
       });
     }
 
-    req.userId = decoded.userId;
+    req.userId = user.id;
     req.userEmail = user.email;
 
     next();

@@ -23,7 +23,7 @@ router.get("/", async (req: any, res: Response) => {
     const questions = await prisma.question.findMany({
       where,
       take: Math.min(parseInt(String(count)), 20),
-      orderBy: { id: "asc" },
+      orderBy: { questionNumber: "asc" },
       include: {
         topic: { select: { name: true, slug: true } },
       },

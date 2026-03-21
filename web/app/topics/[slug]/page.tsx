@@ -229,17 +229,29 @@ export default function TopicPage() {
                 <div className="space-y-6">
 
                   {/* Video Player */}
-                  {activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
-                    <div className="bg-black rounded-2xl overflow-hidden aspect-video">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
-                        title={activeLesson.title}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="w-full h-full"
-                      />
-                    </div>
-                  )}
+{activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
+  <div className="bg-black rounded-2xl overflow-hidden aspect-video">
+    <iframe
+      src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
+      title={activeLesson.title}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
+      className="w-full h-full"
+    />
+  </div>
+)}
+
+{/* Lesson Image — auto-sizes to image dimensions */}
+{activeLesson.imageUrl && (
+  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
+    <img
+      src={activeLesson.imageUrl}
+      alt={activeLesson.title}
+      className="w-full h-auto rounded-lg object-contain max-h-[600px]"
+      style={{ width: "auto", maxWidth: "100%" }}
+    />
+  </div>
+)}
 
                   {/* Lesson Content */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">

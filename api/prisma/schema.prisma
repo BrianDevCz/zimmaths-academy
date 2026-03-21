@@ -9,26 +9,25 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  grade        String?
-  school       String?
-  avatarColour String   @default("#1976D2")
-  streakCount  Int      @default(0)
-  lastActive   DateTime @default(now())
-  createdAt    DateTime @default(now())
-  role         String   @default("student")
-
-  subscription           Subscription?
-  practiceTests          PracticeTest[]
-  dailyChallengeAttempts DailyChallengeAttempt[]
-  points                 UserPoint[]
-  badges                 UserBadge[]
-  bookmarks              Bookmark[]
-  lessonProgress         UserLessonProgress[]
+  id                     String                  @id @default(uuid())
+  name                   String
+  email                  String                  @unique
+  passwordHash           String
+  grade                  String?
+  school                 String?
+  avatarColour           String                  @default("#1976D2")
+  streakCount            Int                     @default(0)
+  lastActive             DateTime                @default(now())
+  createdAt              DateTime                @default(now())
+  role                   String                  @default("student")
   aiChatUsage            AiChatUsage[]
+  bookmarks              Bookmark[]
+  dailyChallengeAttempts DailyChallengeAttempt[]
+  practiceTests          PracticeTest[]
+  subscription           Subscription?
+  badges                 UserBadge[]
+  lessonProgress         UserLessonProgress[]
+  points                 UserPoint[]
 }
 
 model Subscription {
@@ -40,78 +39,75 @@ model Subscription {
   expiresAt        DateTime
   paymentReference String?
   amountUsd        Float
-
-  user User @relation(fields: [userId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
 }
 
 model Topic {
-  id             String  @id @default(uuid())
+  id             String         @id @default(uuid())
   name           String
-  slug           String  @unique
+  slug           String         @unique
   description    String?
   syllabusPoints Json?
   orderIndex     Int
   icon           String?
-  tier           Int     @default(1)
-
-  lessons       Lesson[]
-  questions     Question[]
-  practiceTests PracticeTest[]
+  tier           Int            @default(1)
+  lessons        Lesson[]
+  practiceTests  PracticeTest[]
+  questions      Question[]
 }
 
 model Paper {
-  id                String   @id @default(uuid())
+  id                String     @id @default(uuid())
   year              Int
   session           String
   paperNumber       Int
   title             String
   pdfUrl            String?
-  difficultyOverall String   @default("medium")
-  isFree            Boolean  @default(false)
+  difficultyOverall String     @default("medium")
+  isFree            Boolean    @default(false)
   totalMarks        Int?
   questionCount     Int?
-  createdAt         DateTime @default(now())
-
-  questions Question[]
+  createdAt         DateTime   @default(now())
+  questions         Question[]
 }
 
 model Question {
-  id               String   @id @default(uuid())
+  id               String           @id @default(uuid())
   paperId          String?
   questionNumber   Int
   questionText     String
   questionImageUrl String?
   marks            Int
-  difficulty       String   @default("medium")
+  difficulty       String           @default("medium")
   topicId          String
   subtopic         String?
   solutionText     String?
   solutionSteps    Json?
-  correctAnswer    String?
   videoUrl         String?
-  isFree           Boolean  @default(false)
-  isDailyEligible  Boolean  @default(false)
-  createdAt        DateTime @default(now())
-
-  paper           Paper?            @relation(fields: [paperId], references: [id])
-  topic           Topic            @relation(fields: [topicId], references: [id])
-  dailyChallenges DailyChallenge[]
-  bookmarks       Bookmark[]
+  isFree           Boolean          @default(false)
+  isDailyEligible  Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  correctAnswer    String?
+  bookmarks        Bookmark[]
+  dailyChallenges  DailyChallenge[]
+  paper            Paper?           @relation(fields: [paperId], references: [id])
+  topic            Topic            @relation(fields: [topicId], references: [id])
 }
 
 model Lesson {
-  id               String   @id @default(uuid())
+  id               String               @id @default(uuid())
   topicId          String
   title            String
   content          String
   orderIndex       Int
-  isFree           Boolean  @default(false)
-  estimatedMinutes Int      @default(10)
+  isFree           Boolean              @default(false)
+  estimatedMinutes Int                  @default(10)
+  publishedAt      DateTime             @default(now())
   videoUrl         String?
-  publishedAt      DateTime @default(now())
-
-  topic    Topic                @relation(fields: [topicId], references: [id])
-  progress UserLessonProgress[]
+  geogebraUrl      String?
+  imageUrl         String?
+  topic            Topic                @relation(fields: [topicId], references: [id])
+  progress         UserLessonProgress[]
 }
 
 model PracticeTest {
@@ -124,33 +120,30 @@ model PracticeTest {
   timeTakenSeconds Int?
   completedAt      DateTime @default(now())
   questionsData    Json?
-
-  user  User   @relation(fields: [userId], references: [id])
-  topic Topic? @relation(fields: [topicId], references: [id])
+  topic            Topic?   @relation(fields: [topicId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
 }
 
 model DailyChallenge {
-  id              String   @id @default(uuid())
+  id              String                  @id @default(uuid())
   questionId      String
-  date            DateTime @unique
-  totalAttempts   Int      @default(0)
-  correctAttempts Int      @default(0)
-
-  question Question                @relation(fields: [questionId], references: [id])
-  attempts DailyChallengeAttempt[]
+  date            DateTime                @unique
+  totalAttempts   Int                     @default(0)
+  correctAttempts Int                     @default(0)
+  question        Question                @relation(fields: [questionId], references: [id])
+  attempts        DailyChallengeAttempt[]
 }
 
 model DailyChallengeAttempt {
-  id               String   @id @default(uuid())
+  id               String         @id @default(uuid())
   userId           String
   dailyChallengeId String
   userAnswer       String?
-  isCorrect        Boolean  @default(false)
-  attemptedAt      DateTime @default(now())
-  pointsAwarded    Int      @default(0)
-
-  user           User           @relation(fields: [userId], references: [id])
-  dailyChallenge DailyChallenge @relation(fields: [dailyChallengeId], references: [id])
+  isCorrect        Boolean        @default(false)
+  attemptedAt      DateTime       @default(now())
+  pointsAwarded    Int            @default(0)
+  dailyChallenge   DailyChallenge @relation(fields: [dailyChallengeId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
 }
 
 model UserPoint {
@@ -160,8 +153,7 @@ model UserPoint {
   source    String
   sourceId  String?
   awardedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model UserBadge {
@@ -169,8 +161,7 @@ model UserBadge {
   userId    String
   badgeSlug String
   awardedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Bookmark {
@@ -179,9 +170,8 @@ model Bookmark {
   questionId String
   note       String?
   createdAt  DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id])
-  question Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
 }
 
 model UserLessonProgress {
@@ -189,9 +179,8 @@ model UserLessonProgress {
   userId      String
   lessonId    String
   completedAt DateTime @default(now())
-
-  user   User   @relation(fields: [userId], references: [id])
-  lesson Lesson @relation(fields: [lessonId], references: [id])
+  lesson      Lesson   @relation(fields: [lessonId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model AiChatUsage {
@@ -199,6 +188,5 @@ model AiChatUsage {
   userId       String
   date         DateTime
   messageCount Int      @default(0)
-
-  user User @relation(fields: [userId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
 }

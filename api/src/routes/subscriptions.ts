@@ -268,14 +268,22 @@ router.post("/paynow-webhook", async (req: Request, res: Response) => {
     console.log(`Webhook — Reference: ${reference}, Status: ${paymentStatus}`);
 
     if (paymentStatus === "paid") {
-      const subscription = await findByReference(reference);
-
-      if (subscription) {
-        await activateSubscription(subscription.id, subscription.userId);
-      } else {
-        console.warn("No subscription found for reference:", reference, paynowreference);
-      }
-    }
+  const subscription = await findByReference(reference);
+  if (subscription) {
+    await activateSubscription(subscription.id, subscription.userId);
+  } else {
+    console.warn("No subscription found for callback reference:", reference, paynowreference);
+  }
+} else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
+  const subscription = await findByReference(reference);
+  if (subscription) {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: "failed" },
+    });
+    console.log(`❌ Payment ${paymentStatus} for reference ${reference}`);
+  }
+}
 
     return res.status(200).send("OK");
   } catch (error) {
@@ -295,14 +303,22 @@ router.post("/paynow-callback", async (req: Request, res: Response) => {
     const paymentStatus = status.toLowerCase();
 
     if (paymentStatus === "paid") {
-      const subscription = await findByReference(reference);
-
-      if (subscription) {
-        await activateSubscription(subscription.id, subscription.userId);
-      } else {
-        console.warn("No subscription found for callback reference:", reference, paynowreference);
-      }
-    }
+  const subscription = await findByReference(reference);
+  if (subscription) {
+    await activateSubscription(subscription.id, subscription.userId);
+  } else {
+    console.warn("No subscription found for callback reference:", reference, paynowreference);
+  }
+} else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
+  const subscription = await findByReference(reference);
+  if (subscription) {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: "failed" },
+    });
+    console.log(`❌ Payment ${paymentStatus} for reference ${reference}`);
+  }
+}
 
     return res.status(200).send("OK");
   } catch (error) {

@@ -72,6 +72,8 @@ router.get("/:slug/lessons", async (req, res) => {
         isFree: true,
         estimatedMinutes: true,
         videoUrl: true,
+        geogebraUrl: true,
+        imageUrl: true,
         publishedAt: true,
       },
     });

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -24,6 +24,9 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const [formError, setFormError] = useState("");
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
 
   // Paper form
   const [paperForm, setPaperForm] = useState({
@@ -40,7 +43,18 @@ export default function AdminPage() {
   // Lesson form
   const [lessonForm, setLessonForm] = useState({
     topicId: "", title: "", content: "", orderIndex: 1,
-    isFree: false, estimatedMinutes: 10, videoUrl: "",
+    isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "",
+  });
+
+  // Helper function to always get fresh headers with the latest token
+  const getHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem("zim_token")}`,
+  "Content-Type": "application/json"
+});
+
+  // Helper function to get headers without Content-Type (for file uploads)
+  const getAuthHeaders = () => ({
+    Authorization: `Bearer ${token}`
   });
 
   useEffect(() => {
@@ -49,9 +63,10 @@ export default function AdminPage() {
       router.push("/login?redirect=/admin");
       return;
     }
+
     fetchStats();
     fetchTopics();
-  }, [token, authLoading]);
+  }, [token, authLoading, user]);
 
   useEffect(() => {
     if (!token) return;
@@ -62,12 +77,10 @@ export default function AdminPage() {
     if (activeTab === "subscriptions") fetchSubscriptions();
   }, [activeTab, token]);
 
-  const headers = { Authorization: `Bearer ${token}` };
-
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/admin/stats", { headers });
+      const res = await fetch("http://localhost:5000/api/admin/stats", { headers: getHeaders() });
       if (res.status === 403) { router.push("/"); return; }
       const data = await res.json();
       if (data.success) setStats(data.data);
@@ -78,7 +91,7 @@ export default function AdminPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/users", { headers });
+      const res = await fetch("http://localhost:5000/api/admin/users", { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setUsers(data.data);
     } catch { setError("Failed to load users."); }
@@ -86,7 +99,7 @@ export default function AdminPage() {
 
   const fetchPapers = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/papers", { headers });
+      const res = await fetch("http://localhost:5000/api/admin/papers", { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setPapers(data.data);
     } catch { setError("Failed to load papers."); }
@@ -94,7 +107,7 @@ export default function AdminPage() {
 
   const fetchQuestions = async (paperId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/questions?paperId=${paperId}`, { headers });
+      const res = await fetch(`http://localhost:5000/api/admin/questions?paperId=${paperId}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setQuestions(data.data);
     } catch { setError("Failed to load questions."); }
@@ -102,7 +115,7 @@ export default function AdminPage() {
 
   const fetchPracticeQuestions = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/questions?practiceOnly=true", { headers });
+      const res = await fetch("http://localhost:5000/api/admin/questions?practiceOnly=true", { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setPracticeQuestions(data.data);
     } catch { setError("Failed to load practice questions."); }
@@ -113,7 +126,7 @@ export default function AdminPage() {
       const url = topicId
         ? `http://localhost:5000/api/admin/lessons?topicId=${topicId}`
         : "http://localhost:5000/api/admin/lessons";
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setLessons(data.data);
     } catch { setError("Failed to load lessons."); }
@@ -121,7 +134,7 @@ export default function AdminPage() {
 
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/subscriptions", { headers });
+      const res = await fetch("http://localhost:5000/api/admin/subscriptions", { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setSubscriptions(data.data);
     } catch { setError("Failed to load subscriptions."); }
@@ -129,7 +142,7 @@ export default function AdminPage() {
 
   const fetchTopics = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/topics", { headers });
+      const res = await fetch("http://localhost:5000/api/topics", { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setTopics(data.data);
     } catch {}
@@ -140,7 +153,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("http://localhost:5000/api/admin/papers", {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({
           ...paperForm,
           year: parseInt(String(paperForm.year)),
@@ -161,7 +174,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("http://localhost:5000/api/admin/questions", {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({
           ...questionForm,
           paperId: questionForm.paperId || null,
@@ -191,7 +204,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("http://localhost:5000/api/admin/lessons", {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({
           ...lessonForm,
           orderIndex: parseInt(String(lessonForm.orderIndex)),
@@ -212,7 +225,7 @@ export default function AdminPage() {
   const handleDeletePaper = async (id: string) => {
     if (!confirm("Delete this paper and all its questions?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/papers/${id}`, { method: "DELETE", headers });
+      await fetch(`http://localhost:5000/api/admin/papers/${id}`, { method: "DELETE", headers: getHeaders() });
       fetchPapers();
     } catch { setError("Failed to delete paper."); }
   };
@@ -220,7 +233,7 @@ export default function AdminPage() {
   const handleDeleteQuestion = async (id: string) => {
     if (!confirm("Delete this question?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers });
+      await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() });
       if (questionForm.paperId) fetchQuestions(questionForm.paperId);
       fetchPracticeQuestions();
     } catch { setError("Failed to delete question."); }
@@ -229,16 +242,104 @@ export default function AdminPage() {
   const handleDeleteLesson = async (id: string) => {
     if (!confirm("Delete this lesson?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/lessons/${id}`, { method: "DELETE", headers });
+      await fetch(`http://localhost:5000/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() });
       fetchLessons();
     } catch { setError("Failed to delete lesson."); }
+  };
+
+  const downloadTemplate = () => {
+    const csv = [
+      "topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle",
+      'general-arithmetic,1,"Simplify $\\frac{3}{4} + \\frac{1}{2}$",2,easy,"$\\frac{5}{4}$","Convert to common denominator",true,true,,',
+      'algebra,2,"Solve $2x + 3 = 11$",2,easy,"$x = 4$","$2x = 8$ so $x = 4$",true,false,,"ZimMaths Practice Paper — November 2024 Paper 1"',
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "zimmaths_questions_template.csv";
+    a.click();
+  };
+
+  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split("\n").filter((l) => l.trim());
+      const headers = lines[0].split(",").map((h) => h.trim());
+      const rows = lines.slice(1).map((line) => {
+        const values: string[] = [];
+        let current = "";
+        let inQuotes = false;
+        for (const char of line) {
+          if (char === '"') { inQuotes = !inQuotes; }
+          else if (char === "," && !inQuotes) { values.push(current.trim()); current = ""; }
+          else { current += char; }
+        }
+        values.push(current.trim());
+        const obj: any = {};
+        headers.forEach((h, i) => { obj[h] = values[i] || ""; });
+        return obj;
+      });
+      setCsvPreview(rows);
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleBatchImport = async () => {
+    // Check token first
+    if (!token) {
+      setFormError("You must be logged in to import questions.");
+      return;
+    }
+
+    setImportLoading(true);
+    setImportResult(null);
+    
+    try {
+      const res = await fetch("http://localhost:5000/api/admin/questions/import", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ questions: csvPreview }),
+      });
+      
+      console.log("Import response status:", res.status);
+      
+      // Check if response is ok
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Server error response:", text.substring(0, 200));
+        throw new Error(`Server error ${res.status}: ${text.substring(0, 100)}`);
+      }
+      
+      const data = await res.json();
+      console.log("Import data:", data);
+      
+      if (data.success) {
+        setImportResult(data.data);
+        setCsvPreview([]);
+        fetchPracticeQuestions();
+        if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+        setFormMessage(`Successfully imported ${data.data.imported} questions!`);
+      } else {
+        setFormError(data.error || "Import failed");
+      }
+    } catch (err: any) {
+      console.error("Import error:", err);
+      setFormError("Failed to import questions: " + (err?.message || "Unknown error"));
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   const handleActivateSubscription = async (userId: string, plan: string) => {
     try {
       const res = await fetch(`http://localhost:5000/api/admin/subscriptions/${userId}/activate`, {
         method: "PUT",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: getHeaders(),
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
@@ -246,6 +347,8 @@ export default function AdminPage() {
         setFormMessage("Subscription activated!");
         fetchSubscriptions();
         fetchUsers();
+      } else {
+        setFormError(data.error);
       }
     } catch { setError("Failed to activate subscription."); }
   };
@@ -449,6 +552,90 @@ export default function AdminPage() {
         {activeTab === "questions" && (
           <div className="space-y-6">
 
+            {/* CSV Batch Import */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-1">📥 Batch Import Questions</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Upload a CSV to add multiple questions at once.{" "}
+                <button onClick={downloadTemplate} className="text-brand-600 hover:underline text-sm font-semibold">
+                  Download template
+                </button>
+              </p>
+
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 text-xs text-gray-500 space-y-1">
+                <p className="font-semibold text-gray-700">CSV Column Guide:</p>
+                <p><span className="font-mono bg-white px-1 rounded">topicSlug</span> — e.g. general-arithmetic, algebra, geometry</p>
+                <p><span className="font-mono bg-white px-1 rounded">questionNumber</span> — number to order questions (fill gaps with admin form)</p>
+                <p><span className="font-mono bg-white px-1 rounded">questionText</span> — wrap in quotes, use \\frac for LaTeX</p>
+                <p><span className="font-mono bg-white px-1 rounded">marks, difficulty</span> — difficulty: easy/medium/hard</p>
+                <p><span className="font-mono bg-white px-1 rounded">isFree, isDailyEligible</span> — true or false</p>
+                <p><span className="font-mono bg-white px-1 rounded">questionImageUrl</span> — Uploadcare URL or leave blank</p>
+                <p><span className="font-mono bg-white px-1 rounded">paperTitle</span> — exact paper title or leave blank for practice-only</p>
+              </div>
+
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCsvImport}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+              />
+
+              {csvPreview.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">
+                    Preview — {csvPreview.length} questions ready to import:
+                  </p>
+                  <div className="max-h-48 overflow-y-auto space-y-1 mb-3">
+                    {csvPreview.slice(0, 5).map((q: any, i: number) => (
+                      <div key={i} className="text-xs bg-gray-50 rounded px-3 py-2 flex gap-2 items-center">
+                        <span className="text-brand-600 font-medium w-24 flex-shrink-0">{q.topicSlug}</span>
+                        <span className="text-gray-400 w-6 flex-shrink-0">Q{q.questionNumber}</span>
+                        <span className="text-gray-600 truncate flex-1">{q.questionText}</span>
+                        <span className="text-gray-400 flex-shrink-0">{q.marks}m</span>
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs ${
+                          q.difficulty === "easy" ? "bg-green-100 text-green-700" :
+                          q.difficulty === "hard" ? "bg-red-100 text-red-700" :
+                          "bg-yellow-100 text-yellow-700"
+                        }`}>{q.difficulty}</span>
+                      </div>
+                    ))}
+                    {csvPreview.length > 5 && (
+                      <p className="text-xs text-gray-400 text-center py-1">
+                        ...and {csvPreview.length - 5} more questions
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleBatchImport}
+                      disabled={importLoading}
+                      className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-2 rounded-lg font-semibold text-sm transition"
+                    >
+                      {importLoading ? "Importing..." : `Import ${csvPreview.length} Questions`}
+                    </button>
+                    <button
+                      onClick={() => { setCsvPreview([]); setImportResult(null); }}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {importResult && (
+                <div className={`mt-3 px-4 py-3 rounded-lg text-sm ${
+                  importResult.failed > 0 ? "bg-yellow-50 border border-yellow-200 text-yellow-700" 
+                  : "bg-green-50 border border-green-200 text-green-700"
+                }`}>
+                  <p className="font-semibold">✅ {importResult.imported} questions imported successfully{importResult.failed > 0 ? `, ⚠️ ${importResult.failed} failed` : ""}</p>
+                  {importResult.errors?.map((e: string, i: number) => (
+                    <p key={i} className="text-xs mt-1">{e}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Add Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">➕ Add New Question</h2>
@@ -620,11 +807,11 @@ export default function AdminPage() {
                           <MathContent>{q.questionText || ""}</MathContent>
                         </div>
                         {q.correctAnswer && (
-  <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
-    <span>Answer:</span>
-    <MathContent>{q.correctAnswer}</MathContent>
-  </div>
-)}
+                          <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
+                            <span>Answer:</span>
+                            <MathContent>{q.correctAnswer}</MathContent>
+                          </div>
+                        )}
                       </div>
                       <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
                     </div>
@@ -659,11 +846,11 @@ export default function AdminPage() {
                           <MathContent>{q.questionText || ""}</MathContent>
                         </div>
                         {q.correctAnswer && (
-  <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
-    <span>Answer:</span>
-    <MathContent>{q.correctAnswer}</MathContent>
-  </div>
-)}
+                          <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
+                            <span>Answer:</span>
+                            <MathContent>{q.correctAnswer}</MathContent>
+                          </div>
+                        )}
                       </div>
                       <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold flex-shrink-0">Delete</button>
                     </div>
@@ -717,6 +904,31 @@ export default function AdminPage() {
                     onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
                     placeholder="e.g. https://www.youtube.com/watch?v=..."
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Lesson Diagram / Image <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <LR.FileUploaderRegular
+                    pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""}
+                    imgOnly={true}
+                    multiple={false}
+                    onFileUploadSuccess={(file: any) => {
+                      setLessonForm({ ...lessonForm, imageUrl: file.cdnUrl });
+                      setFormMessage("Image uploaded successfully!");
+                    }}
+                    onFileUploadFailed={() => setFormError("Image upload failed.")}
+                  />
+                  {lessonForm.imageUrl && (
+                    <div className="mt-3">
+                      <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
+                      <img src={lessonForm.imageUrl} alt="Lesson diagram"
+                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
+                      <button onClick={() => setLessonForm({ ...lessonForm, imageUrl: "" })}
+                        className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
+                    </div>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Content</label>
@@ -785,7 +997,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Premium</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
-                   </tr>
+                  </tr>
                 </thead>
                 <tbody>
                   {users.map((u: any) => (
@@ -843,7 +1055,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Amount</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Expires</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Reference</th>
-                   </tr>
+                  </tr>
                 </thead>
                 <tbody>
                   {subscriptions.map((s: any) => (
