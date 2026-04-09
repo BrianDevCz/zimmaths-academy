@@ -55,7 +55,7 @@ router.get("/", async (req: any, res: Response) => {
 });
 
 // GET single question by ID — AUTH REQUIRED
-router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
+router.get("/:id", async (req: AuthRequest, res: Response) => {
   try {
     const question = await prisma.question.findUnique({
       where: { id: String(req.params.id) },
@@ -80,15 +80,29 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     let hasPremium = false;
-    if (req.userId) {
-      const subscription = await prisma.subscription.findFirst({
-        where: {
-          userId: req.userId,
-          status: "active",
-          expiresAt: { gt: new Date() },
-        },
-      });
-      hasPremium = !!subscription;
+
+    // Optionally decode token if present — auth is not required to view question
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const jwt = require("jsonwebtoken");
+        const decoded = jwt.verify(
+          authHeader.split(" ")[1],
+          process.env.JWT_SECRET as string
+        ) as { userId: string };
+        if (decoded?.userId) {
+          const subscription = await prisma.subscription.findFirst({
+            where: {
+              userId: decoded.userId,
+              status: "active",
+              expiresAt: { gt: new Date() },
+            },
+          });
+          hasPremium = !!subscription;
+        }
+      } catch {
+        // Invalid token — treat as guest
+      }
     }
 
     const canViewSolution = question.isFree || hasPremium;
