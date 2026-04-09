@@ -54,7 +54,31 @@ app.use(cors({
   credentials: true,
 }));
 app.use(generalLimiter);
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Sanitise all incoming request bodies — strip XSS and NoSQL injection attempts
+app.use((req, res, next) => {
+  if (req.body) {
+    const xss = require("xss");
+    const sanitise = (obj: any): any => {
+      if (typeof obj === "string") return xss(obj);
+      if (Array.isArray(obj)) return obj.map(sanitise);
+      if (obj && typeof obj === "object") {
+        const clean: any = {};
+        for (const key of Object.keys(obj)) {
+          // Strip keys that start with $ or contain . (NoSQL injection)
+          if (key.startsWith("$") || key.includes(".")) continue;
+          clean[key] = sanitise(obj[key]);
+        }
+        return clean;
+      }
+      return obj;
+    };
+    req.body = sanitise(req.body);
+  }
+  next();
+});
 
 // REMOVED the entire app.get("/api/questions", ...) block here
 

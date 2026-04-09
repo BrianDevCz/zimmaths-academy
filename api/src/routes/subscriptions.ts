@@ -21,6 +21,23 @@ const plans: Record<string, { label: string; price: number; days: number }> = {
   annual: { label: "1 Year", price: 45, days: 365 },
 };
 
+// In-memory lock to prevent duplicate payments from same user within 10 seconds
+const paymentLocks = new Map<string, number>();
+
+function acquireLock(userId: string): boolean {
+  const now = Date.now();
+  const lastAttempt = paymentLocks.get(userId);
+  if (lastAttempt && now - lastAttempt < 10000) {
+    return false; // locked — too soon
+  }
+  paymentLocks.set(userId, now);
+  return true;
+}
+
+function releaseLock(userId: string) {
+  paymentLocks.delete(userId);
+}
+
 // Helper — find subscription by reference string
 async function findByReference(reference: string) {
   if (!reference) return null;
@@ -38,6 +55,13 @@ async function findByReference(reference: string) {
 
 // Helper — activate subscription by id
 async function activateSubscription(id: string, userId: string) {
+  // Check if already active to prevent double activation
+  const existing = await prisma.subscription.findUnique({ where: { id } });
+  if (existing?.status === "active") {
+    console.log(`Subscription ${id} already active — skipping duplicate activation`);
+    return;
+  }
+
   await prisma.subscription.update({
     where: { id },
     data: { status: "active" },
@@ -115,7 +139,6 @@ router.get("/status/:reference", async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/subscriptions/poll-paynow
-// Directly polls Paynow for payment status using pollUrl
 router.get("/poll-paynow", async (req: AuthRequest, res: Response) => {
   try {
     if (!req.userId) {
@@ -128,16 +151,19 @@ router.get("/poll-paynow", async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, error: "Poll URL required." });
     }
 
-    // Ask Paynow directly for payment status
     const status = await paynow.pollTransaction(String(pollUrl));
     console.log("Paynow poll result:", status);
 
     if (status.paid || status.status?.toLowerCase() === "paid") {
-      // Activate subscription in database
-      await prisma.subscription.update({
+      // Find and activate — with duplicate protection inside activateSubscription
+      const subscription = await prisma.subscription.findFirst({
         where: { userId: req.userId },
-        data: { status: "active" },
+        orderBy: { startedAt: "desc" },
       });
+
+      if (subscription) {
+        await activateSubscription(subscription.id, req.userId);
+      }
 
       return res.status(200).json({
         success: true,
@@ -165,6 +191,14 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ success: false, error: "User not authenticated" });
     }
 
+    // Idempotency lock — prevent double payments within 10 seconds
+    if (!acquireLock(req.userId)) {
+      return res.status(429).json({
+        success: false,
+        error: "Payment already in progress. Please wait a moment.",
+      });
+    }
+
     const schema = z.object({
       plan: z.enum(["two_weeks", "monthly", "annual"]),
       paymentMethod: z.enum(["ecocash", "innbucks", "omari"]),
@@ -175,11 +209,46 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
 
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
+      releaseLock(req.userId);
       return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     }
 
     const { plan, paymentMethod, phone, email } = parsed.data;
     const planDetails = plans[plan];
+
+    // Check if user already has an active subscription
+    const existingActive = await prisma.subscription.findFirst({
+      where: {
+        userId: req.userId,
+        status: "active",
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (existingActive) {
+      releaseLock(req.userId);
+      return res.status(400).json({
+        success: false,
+        error: "You already have an active subscription.",
+      });
+    }
+
+    // Check for a pending payment initiated in the last 2 minutes — prevent duplicates
+    const recentPending = await prisma.subscription.findFirst({
+      where: {
+        userId: req.userId,
+        status: "pending",
+        startedAt: { gt: new Date(Date.now() - 2 * 60 * 1000) },
+      },
+    });
+
+    if (recentPending) {
+      releaseLock(req.userId);
+      return res.status(400).json({
+        success: false,
+        error: "A payment is already pending. Please complete or wait 2 minutes before trying again.",
+      });
+    }
 
     // Generate unique payment reference
     const paymentReference = `ZM-${Date.now()}-${req.userId.slice(0, 8).toUpperCase()}`;
@@ -188,7 +257,7 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + planDetails.days);
 
-    // Upsert subscription — one record per user
+    // Upsert subscription
     await prisma.subscription.upsert({
       where: { userId: req.userId },
       update: {
@@ -210,25 +279,25 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Create Paynow payment using customer email
+    // Create Paynow payment
     const payment = paynow.createPayment(
       paymentReference,
       process.env.PAYNOW_MERCHANT_EMAIL || email
     );
     payment.add(`ZimMaths Premium — ${planDetails.label}`, planDetails.price);
 
-    // Handle different payment methods
     let response;
     if (paymentMethod === "ecocash") {
       response = await paynow.sendMobile(payment, phone, "ecocash");
     } else if (paymentMethod === "innbucks") {
       response = await paynow.sendMobile(payment, phone, "innbucks");
     } else {
-      // omari — standard redirect
       response = await paynow.send(payment);
     }
 
     console.log("Paynow response:", response);
+
+    releaseLock(req.userId);
 
     if (response && response.success) {
       return res.status(200).json({
@@ -250,6 +319,7 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       });
     }
   } catch (error) {
+    if (req.userId) releaseLock(req.userId);
     console.error("Subscription initiate error:", error);
     return res.status(500).json({ success: false, error: "Failed to initiate payment. Please try again." });
   }
@@ -268,22 +338,22 @@ router.post("/paynow-webhook", async (req: Request, res: Response) => {
     console.log(`Webhook — Reference: ${reference}, Status: ${paymentStatus}`);
 
     if (paymentStatus === "paid") {
-  const subscription = await findByReference(reference);
-  if (subscription) {
-    await activateSubscription(subscription.id, subscription.userId);
-  } else {
-    console.warn("No subscription found for callback reference:", reference, paynowreference);
-  }
-} else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
-  const subscription = await findByReference(reference);
-  if (subscription) {
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { status: "failed" },
-    });
-    console.log(`❌ Payment ${paymentStatus} for reference ${reference}`);
-  }
-}
+      const subscription = await findByReference(reference);
+      if (subscription) {
+        await activateSubscription(subscription.id, subscription.userId);
+      } else {
+        console.warn("No subscription found for webhook reference:", reference, paynowreference);
+      }
+    } else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
+      const subscription = await findByReference(reference);
+      if (subscription && subscription.status !== "active") {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "failed" },
+        });
+        console.log(`Payment ${paymentStatus} for reference ${reference}`);
+      }
+    }
 
     return res.status(200).send("OK");
   } catch (error) {
@@ -303,22 +373,22 @@ router.post("/paynow-callback", async (req: Request, res: Response) => {
     const paymentStatus = status.toLowerCase();
 
     if (paymentStatus === "paid") {
-  const subscription = await findByReference(reference);
-  if (subscription) {
-    await activateSubscription(subscription.id, subscription.userId);
-  } else {
-    console.warn("No subscription found for callback reference:", reference, paynowreference);
-  }
-} else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
-  const subscription = await findByReference(reference);
-  if (subscription) {
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { status: "failed" },
-    });
-    console.log(`❌ Payment ${paymentStatus} for reference ${reference}`);
-  }
-}
+      const subscription = await findByReference(reference);
+      if (subscription) {
+        await activateSubscription(subscription.id, subscription.userId);
+      } else {
+        console.warn("No subscription found for callback reference:", reference, paynowreference);
+      }
+    } else if (["failed", "cancelled", "disputed"].includes(paymentStatus)) {
+      const subscription = await findByReference(reference);
+      if (subscription && subscription.status !== "active") {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { status: "failed" },
+        });
+        console.log(`Payment ${paymentStatus} for reference ${reference}`);
+      }
+    }
 
     return res.status(200).send("OK");
   } catch (error) {
@@ -341,7 +411,7 @@ router.post("/confirm", async (req: AuthRequest, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: "Subscription activated! Welcome to ZimMaths Premium! 🎉",
+      message: "Subscription activated! Welcome to ZimMaths Premium!",
     });
   } catch (error) {
     console.error("Subscription confirm error:", error);
