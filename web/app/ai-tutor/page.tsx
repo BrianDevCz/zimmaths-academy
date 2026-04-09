@@ -43,9 +43,15 @@ export default function AITutorPage() {
     ]);
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const isFirstLoad = useRef(true);
+
+useEffect(() => {
+  if (isFirstLoad.current) {
+    isFirstLoad.current = false;
+    return;
+  }
+  messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [messages]);
 
   const fetchSuggestions = async () => {
     try {

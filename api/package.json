@@ -26,6 +26,7 @@
     "openai": "^6.29.0",
     "paynow": "^2.2.2",
     "prisma": "^5.22.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import MathContent from "../../components/MathContent";
+import LessonMathContent from "../../components/LessonMathContent";
 
 export default function TopicPage() {
   const { token, loading: authLoading } = useAuth();
@@ -229,29 +230,29 @@ export default function TopicPage() {
                 <div className="space-y-6">
 
                   {/* Video Player */}
-{activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
-  <div className="bg-black rounded-2xl overflow-hidden aspect-video">
-    <iframe
-      src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
-      title={activeLesson.title}
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowFullScreen
-      className="w-full h-full"
-    />
-  </div>
-)}
+                  {activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
+                    <div className="bg-black rounded-2xl overflow-hidden aspect-video">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
+                        title={activeLesson.title}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                      />
+                    </div>
+                  )}
 
-{/* Lesson Image — auto-sizes to image dimensions */}
-{activeLesson.imageUrl && (
-  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
-    <img
-      src={activeLesson.imageUrl}
-      alt={activeLesson.title}
-      className="w-full h-auto rounded-lg object-contain max-h-[600px]"
-      style={{ width: "auto", maxWidth: "100%" }}
-    />
-  </div>
-)}
+                  {/* Lesson Image */}
+                  {activeLesson.imageUrl && (
+                    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
+                      <img
+                        src={activeLesson.imageUrl}
+                        alt={activeLesson.title}
+                        className="w-full h-auto rounded-lg object-contain max-h-[600px]"
+                        style={{ width: "auto", maxWidth: "100%" }}
+                      />
+                    </div>
+                  )}
 
                   {/* Lesson Content */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -263,10 +264,11 @@ export default function TopicPage() {
                         {activeLesson.estimatedMinutes} min read
                       </span>
                     </div>
-                    <div
-                      className="prose prose-sm max-w-none text-gray-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: activeLesson.content }}
-                    />
+                    <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
+                      <LessonMathContent>
+                        {activeLesson.content}
+                      </LessonMathContent>
+                    </div>
                   </div>
 
                   {/* Next Lesson */}
@@ -331,7 +333,6 @@ export default function TopicPage() {
                         {q.marks} marks
                       </span>
                     </div>
-                    {/* Replace the plain text with MathContent component */}
                     <MathContent>{q.questionText || ""}</MathContent>
                     {q.questionImageUrl && (
                       <img

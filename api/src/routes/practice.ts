@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth";
 import { awardPoints } from "../points";
 import { markAnswer } from "../marking";
+import { markAnswerWithAI, extractTextFromImage } from "../aiMarking";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -36,15 +37,14 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Shuffle and pick random questions
     const shuffled = allQuestions.sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, Math.min(questionCount, allQuestions.length));
 
-    // Never send solution data during the test
     const questions = selected.map((q) => ({
       id: q.id,
       questionNumber: q.questionNumber,
       questionText: q.questionText,
+      questionImageUrl: (q as any).questionImageUrl || null,
       marks: q.marks,
       difficulty: q.difficulty,
       topic: q.topic,
@@ -57,6 +57,27 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
       success: false,
       error: "Failed to generate practice test.",
     });
+  }
+});
+
+// POST /api/practice/ocr
+// Accepts a base64 image, returns extracted text
+router.post("/ocr", async (req: AuthRequest, res: Response) => {
+  try {
+    const { imageBase64 } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, error: "No image provided." });
+    }
+
+    const extractedText = await extractTextFromImage(imageBase64);
+
+    return res.json({
+      success: true,
+      text: extractedText,
+    });
+  } catch (error) {
+    console.error("OCR error:", error);
+    return res.status(500).json({ success: false, error: "OCR failed." });
   }
 });
 
@@ -79,46 +100,101 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
       include: { topic: { select: { name: true, slug: true } } },
     });
 
-    // Mark each answer using smart marking engine
-const results = answers.map((answer: any) => {
-  const question = questions.find((q) => q.id === answer.questionId);
-  if (!question) return null;
+    // Mark each answer — smart engine first, AI for uncertain cases
+    const results = await Promise.all(
+      answers.map(async (answer: any) => {
+        const question = questions.find((q) => q.id === answer.questionId);
+        if (!question) return null;
 
-  // Use correctAnswer field if available, fall back to solutionText
-  const correctAnswer = (question as any).correctAnswer || question.solutionText || "";
-  const solutionText = question.solutionText || "";
+        const correctAnswer = (question as any).correctAnswer || question.solutionText || "";
+        const solutionText = question.solutionText || "";
 
-  const marking = markAnswer(
-    answer.userAnswer || "",
-    correctAnswer,
-    solutionText
-  );
+        // partAnswers: { a: "9,0", b: "5" } — sent when frontend splits by part
+        // userAnswer: plain string — sent for single-part questions
+        const partAnswers: { [key: string]: string } | null = answer.partAnswers || null;
+        const userAnswer = partAnswers
+          ? Object.entries(partAnswers)
+              .map(([k, v]) => `(${k}) ${v}`)
+              .join(" ")
+          : answer.userAnswer || "";
 
-  return {
-    questionId: question.id,
-    questionText: question.questionText,
-    userAnswer: answer.userAnswer,
-    correctAnswer,
-    solutionSteps: question.solutionSteps,
-    isCorrect: marking.isCorrect,
-    confidence: marking.confidence,
-    feedback: marking.feedback,
-    marks: question.marks,
-    topic: question.topic?.name,
-    difficulty: question.difficulty,
-  };
-}).filter(Boolean);
+        let finalResult;
 
-    const totalQuestions = results.length;
-    const correctCount = results.filter((r: any) => r.isCorrect).length;
-    const scorePercentage = totalQuestions > 0
-      ? Math.round((correctCount / totalQuestions) * 100)
-      : 0;
+        if (partAnswers && Object.keys(partAnswers).length > 0) {
+          // Per-part answers submitted — always use AI for clean per-part marking
+          finalResult = await markAnswerWithAI(
+            question.questionText,
+            userAnswer,
+            correctAnswer,
+            solutionText,
+            question.marks
+          );
+        } else {
+          // Single answer — smart engine first
+          const smartResult = markAnswer(userAnswer, correctAnswer, solutionText);
 
-    // Award points if user is logged in
+          if (smartResult.confidence === "exact" || smartResult.confidence === "numerical") {
+            finalResult = {
+              isCorrect: smartResult.isCorrect,
+              isPartiallyCorrect: false,
+              marksAwarded: smartResult.isCorrect ? question.marks : 0,
+              totalMarks: question.marks,
+              confidence: smartResult.confidence,
+              feedback: smartResult.feedback,
+              workingShown: false,
+              method: "smart",
+            };
+          } else {
+            finalResult = await markAnswerWithAI(
+              question.questionText,
+              userAnswer,
+              correctAnswer,
+              solutionText,
+              question.marks
+            );
+          }
+        }
+
+        return {
+          questionId: question.id,
+          questionText: question.questionText,
+          questionImageUrl: (question as any).questionImageUrl || null,
+          userAnswer,
+          partAnswers,
+          correctAnswer,
+          solutionSteps: question.solutionSteps,
+          isCorrect: finalResult.isCorrect,
+          isPartiallyCorrect: finalResult.isPartiallyCorrect,
+          marksAwarded: finalResult.marksAwarded,
+          totalMarks: finalResult.totalMarks,
+          confidence: finalResult.confidence,
+          feedback: finalResult.feedback,
+          marks: question.marks,
+          topic: question.topic?.name,
+          difficulty: question.difficulty,
+          markingMethod: finalResult.method,
+          partResults: finalResult.partResults || [],
+        };
+      })
+    );
+
+    const validResults = results.filter(Boolean);
+    const totalQuestions = validResults.length;
+    const correctCount = validResults.filter((r: any) => r.isCorrect).length;
+    const totalMarksAvailable = validResults.reduce(
+      (sum: number, r: any) => sum + (r.totalMarks || 0), 0
+    );
+    const totalMarksAwarded = validResults.reduce(
+      (sum: number, r: any) => sum + (r.marksAwarded || 0), 0
+    );
+    const scorePercentage =
+      totalMarksAvailable > 0
+        ? Math.round((totalMarksAwarded / totalMarksAvailable) * 100)
+        : 0;
+
+    // Award points
     let pointsAwarded = 0;
     if (req.userId) {
-      // Points for completing the test
       if (totalQuestions >= 20) {
         pointsAwarded += await awardPoints(req.userId, "practice_20q");
       } else if (totalQuestions >= 10) {
@@ -127,14 +203,12 @@ const results = answers.map((answer: any) => {
         pointsAwarded += await awardPoints(req.userId, "practice_5q");
       }
 
-      // Bonus points for high scores
       if (scorePercentage === 100) {
         pointsAwarded += await awardPoints(req.userId, "practice_bonus_100");
       } else if (scorePercentage >= 80) {
         pointsAwarded += await awardPoints(req.userId, "practice_bonus_80");
       }
 
-      // Save practice test result
       await prisma.practiceTest.create({
         data: {
           userId: req.userId,
@@ -142,7 +216,7 @@ const results = answers.map((answer: any) => {
           questionCount: totalQuestions,
           scorePercentage,
           timeTakenSeconds: req.body.timeTaken || 0,
-          questionsData: results as any,
+          questionsData: validResults as any,
         },
       });
     }
@@ -150,14 +224,16 @@ const results = answers.map((answer: any) => {
     return res.json({
       success: true,
       data: {
-        results,
+        results: validResults,
         summary: {
           totalQuestions,
           correctCount,
+          totalMarksAvailable,
+          totalMarksAwarded,
           scorePercentage,
-          pointsAwarded
-        }
-      }
+          pointsAwarded,
+        },
+      },
     });
   } catch (error) {
     console.error("Practice submit error:", error);

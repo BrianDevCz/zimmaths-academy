@@ -3,10 +3,39 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import * as LR from "@uploadcare/react-uploader";
-import "@uploadcare/react-uploader/core.css";
 import MathContent from "../components/MathContent";
 import LatexCheatSheet from "../components/LatexCheatSheet";
+
+const UPLOADCARE_PUBLIC_KEY = "7e4e42ae6a4d7550d670";
+const UPLOADCARE_CDN = "https://d9s36eq1lg.ucarecd.net";
+
+// Single upload function with proper error handling
+async function uploadImage(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("UPLOADCARE_PUB_KEY", UPLOADCARE_PUBLIC_KEY);
+  formData.append("UPLOADCARE_STORE", "auto");
+  formData.append("file", file);
+  
+  try {
+    const res = await fetch("https://upload.uploadcare.com/base/", { 
+      method: "POST", 
+      body: formData 
+    });
+    
+    if (!res.ok) {
+      throw new Error(`Upload failed with status ${res.status}`);
+    }
+    
+    const data = await res.json();
+    if (!data.file) throw new Error("No file ID returned from Uploadcare");
+    
+    // Return the full CDN URL
+    return `${UPLOADCARE_CDN}/${data.file}/`;
+  } catch (error) {
+    console.error("Image upload error:", error);
+    throw error;
+  }
+}
 
 export default function AdminPage() {
   const { token, user, loading: authLoading } = useAuth();
@@ -29,6 +58,8 @@ export default function AdminPage() {
   const [importResult, setImportResult] = useState<any>(null);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [selectedPaperId, setSelectedPaperId] = useState<string>("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Paper form
   const [paperForm, setPaperForm] = useState({
@@ -67,10 +98,14 @@ export default function AdminPage() {
     if (!token) return;
     if (activeTab === "users") fetchUsers();
     if (activeTab === "papers") fetchPapers();
-    if (activeTab === "questions") { fetchPapers(); fetchPracticeQuestions(); }
+    if (activeTab === "questions") { 
+      fetchPapers(); 
+      fetchPracticeQuestions();
+      if (selectedPaperId) fetchQuestions(selectedPaperId);
+    }
     if (activeTab === "lessons") fetchLessons();
     if (activeTab === "subscriptions") fetchSubscriptions();
-  }, [activeTab, token]);
+  }, [activeTab, token, selectedPaperId]);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -204,6 +239,10 @@ export default function AdminPage() {
       isDailyEligible: q.isDailyEligible,
       questionImageUrl: q.questionImageUrl || "",
     });
+    if (q.paperId) {
+      setSelectedPaperId(q.paperId);
+      fetchQuestions(q.paperId);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -308,7 +347,7 @@ export default function AdminPage() {
     if (!confirm("Delete this question?")) return;
     try {
       await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() });
-      if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+      if (selectedPaperId) fetchQuestions(selectedPaperId);
       fetchPracticeQuestions();
     } catch { setError("Failed to delete question."); }
   };
@@ -382,7 +421,7 @@ export default function AdminPage() {
         setImportResult(data.data);
         setCsvPreview([]);
         fetchPracticeQuestions();
-        if (questionForm.paperId) fetchQuestions(questionForm.paperId);
+        if (selectedPaperId) fetchQuestions(selectedPaperId);
         setFormMessage(`Successfully imported ${data.data.imported} questions!`);
       } else { setFormError(data.error || "Import failed"); }
     } catch (err: any) {
@@ -654,7 +693,16 @@ export default function AdminPage() {
                     Paper <span className="text-gray-400 font-normal text-xs">(optional — leave blank for practice-only)</span>
                   </label>
                   <select value={questionForm.paperId}
-                    onChange={(e) => { setQuestionForm({ ...questionForm, paperId: e.target.value }); if (e.target.value) fetchQuestions(e.target.value); }}
+                    onChange={(e) => { 
+                      setQuestionForm({ ...questionForm, paperId: e.target.value }); 
+                      if (e.target.value) {
+                        setSelectedPaperId(e.target.value);
+                        fetchQuestions(e.target.value);
+                      } else {
+                        setSelectedPaperId("");
+                        setQuestions([]);
+                      }
+                    }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">No paper — Practice question only</option>
                     {papers.map((p: any) => <option key={p.id} value={p.id}>{p.title}</option>)}
@@ -716,14 +764,47 @@ export default function AdminPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Question Diagram / Image <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
-                  <LR.FileUploaderRegular pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""} imgOnly={true} multiple={false}
-                    onFileUploadSuccess={(file: any) => { setQuestionForm({ ...questionForm, questionImageUrl: file.cdnUrl }); setFormMessage("Image uploaded!"); }}
-                    onFileUploadFailed={() => setFormError("Image upload failed.")} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingImage(true);
+                      setFormMessage("Uploading image...");
+                      try {
+                        const url = await uploadImage(file);
+                        setQuestionForm({ ...questionForm, questionImageUrl: url });
+                        setFormMessage("Image uploaded successfully!");
+                      } catch (err) {
+                        setFormError("Image upload failed: " + (err as Error).message);
+                      } finally {
+                        setUploadingImage(false);
+                      }
+                    }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+                  />
+                  {uploadingImage && (
+                    <div className="mt-2 text-xs text-brand-600">Uploading... please wait</div>
+                  )}
                   {questionForm.questionImageUrl && (
                     <div className="mt-3">
                       <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
-                      <img src={questionForm.questionImageUrl} alt="Question diagram" className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
-                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })} className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
+                      <img 
+                        src={questionForm.questionImageUrl} 
+                        alt="Question diagram" 
+                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain"
+                        onError={(e) => {
+                          console.error("Failed to load image preview:", questionForm.questionImageUrl);
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                      <button 
+                        onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })} 
+                        className="mt-2 text-xs text-red-500 hover:text-red-700"
+                      >
+                        Remove image
+                      </button>
                     </div>
                   )}
                 </div>
@@ -776,6 +857,19 @@ export default function AdminPage() {
                           {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Image</span>}
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        {q.questionImageUrl && (
+                          <div className="mt-2">
+                            <img 
+                              src={q.questionImageUrl} 
+                              alt="Question diagram" 
+                              className="max-w-full max-h-48 rounded-lg border border-gray-200 object-contain"
+                              onError={(e) => {
+                                console.error("Failed to load question image:", q.questionImageUrl);
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        )}
                         {q.correctAnswer && (
                           <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
                             <span>Answer:</span><MathContent>{q.correctAnswer}</MathContent>
@@ -809,8 +903,22 @@ export default function AdminPage() {
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{q.topic?.name}</span>
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily eligible</span>}
+                          {q.questionImageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">📷 Image</span>}
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        {q.questionImageUrl && (
+                          <div className="mt-2">
+                            <img 
+                              src={q.questionImageUrl} 
+                              alt="Question diagram" 
+                              className="max-w-full max-h-48 rounded-lg border border-gray-200 object-contain"
+                              onError={(e) => {
+                                console.error("Failed to load practice question image:", q.questionImageUrl);
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        )}
                         {q.correctAnswer && (
                           <div className="text-xs text-green-600 mt-1 flex gap-1 items-center">
                             <span>Answer:</span><MathContent>{q.correctAnswer}</MathContent>
@@ -871,13 +979,41 @@ export default function AdminPage() {
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Diagram / Image <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <LR.FileUploaderRegular pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_PUBLIC_KEY || ""} imgOnly={true} multiple={false}
-                    onFileUploadSuccess={(file: any) => { setLessonForm({ ...lessonForm, imageUrl: file.cdnUrl }); setFormMessage("Image uploaded!"); }}
-                    onFileUploadFailed={() => setFormError("Image upload failed.")} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingImage(true);
+                      setFormMessage("Uploading image...");
+                      try {
+                        const url = await uploadImage(file);
+                        setLessonForm({ ...lessonForm, imageUrl: url });
+                        setFormMessage("Image uploaded successfully!");
+                      } catch (err) {
+                        setFormError("Image upload failed: " + (err as Error).message);
+                      } finally {
+                        setUploadingImage(false);
+                      }
+                    }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer"
+                  />
+                  {uploadingImage && (
+                    <div className="mt-2 text-xs text-brand-600">Uploading... please wait</div>
+                  )}
                   {lessonForm.imageUrl && (
                     <div className="mt-3">
                       <p className="text-xs text-green-600 mb-2">✅ Image uploaded</p>
-                      <img src={lessonForm.imageUrl} alt="Lesson diagram" className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
+                      <img 
+                        src={lessonForm.imageUrl} 
+                        alt="Lesson diagram" 
+                        className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain"
+                        onError={(e) => {
+                          console.error("Failed to load lesson image preview:", lessonForm.imageUrl);
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
                       <button onClick={() => setLessonForm({ ...lessonForm, imageUrl: "" })} className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
                     </div>
                   )}
@@ -926,6 +1062,19 @@ export default function AdminPage() {
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{lesson.topic?.name}</span>
                         </div>
                         <p className="text-sm font-semibold text-gray-800">{lesson.title}</p>
+                        {lesson.imageUrl && (
+                          <div className="mt-2">
+                            <img 
+                              src={lesson.imageUrl} 
+                              alt="Lesson image" 
+                              className="max-w-full max-h-32 rounded-lg border border-gray-200 object-contain"
+                              onError={(e) => {
+                                console.error("Failed to load lesson image:", lesson.imageUrl);
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        )}
                         <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{lesson.content?.replace(/<[^>]*>/g, "").substring(0, 80)}...</p>
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
@@ -955,7 +1104,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Premium</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u: any) => (
