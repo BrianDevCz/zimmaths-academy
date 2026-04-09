@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 // POST /api/practice/generate
 router.post("/generate", async (req: AuthRequest, res: Response) => {
   try {
-    const { topicSlug, difficulty, count } = req.body;
+    const { topicSlug, difficulty, count, excludeIds } = req.body;
     const where: any = {};
 
     if (topicSlug && topicSlug !== "mixed") {
@@ -25,6 +25,24 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
 
     const questionCount = Math.min(parseInt(count) || 5, 20);
 
+    // Check if user has premium subscription
+    let isPremium = false;
+    if (req.userId) {
+      const subscription = await prisma.subscription.findFirst({
+        where: {
+          userId: req.userId,
+          status: "active",
+          expiresAt: { gt: new Date() },
+        },
+      });
+      isPremium = !!subscription;
+    }
+
+    // Non-premium users only get free questions
+    if (!isPremium) {
+      where.isFree = true;
+    }
+
     const allQuestions = await prisma.question.findMany({
       where,
       include: { topic: { select: { name: true, slug: true } } },
@@ -33,12 +51,28 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
     if (allQuestions.length === 0) {
       return res.status(404).json({
         success: false,
-        error: "No questions found for these settings. Try different filters.",
+        error: isPremium
+          ? "No questions found for these settings. Try different filters."
+          : "No free questions found for these settings. Upgrade to access all questions.",
       });
     }
 
-    const shuffled = allQuestions.sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, Math.min(questionCount, allQuestions.length));
+    // Fisher-Yates proper unbiased shuffle
+    const shuffled = [...allQuestions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Avoid recently seen questions if client sends excluded IDs
+    const recentlySeenIds: string[] = Array.isArray(excludeIds) ? excludeIds : [];
+    const filtered = recentlySeenIds.length > 0
+      ? shuffled.filter((q) => !recentlySeenIds.includes(q.id))
+      : shuffled;
+
+    // Fall back to full pool if exclusions leave too few questions
+    const pool = filtered.length >= questionCount ? filtered : shuffled;
+    const selected = pool.slice(0, Math.min(questionCount, pool.length));
 
     const questions = selected.map((q) => ({
       id: q.id,
@@ -48,9 +82,15 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
       marks: q.marks,
       difficulty: q.difficulty,
       topic: q.topic,
+      isFree: q.isFree,
     }));
 
-    return res.json({ success: true, count: questions.length, data: questions });
+    return res.json({
+      success: true,
+      count: questions.length,
+      isPremium,
+      data: questions,
+    });
   } catch (error) {
     console.error("Practice generate error:", error);
     return res.status(500).json({
@@ -61,7 +101,6 @@ router.post("/generate", async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/practice/ocr
-// Accepts a base64 image, returns extracted text
 router.post("/ocr", async (req: AuthRequest, res: Response) => {
   try {
     const { imageBase64 } = req.body;
@@ -109,8 +148,6 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         const correctAnswer = (question as any).correctAnswer || question.solutionText || "";
         const solutionText = question.solutionText || "";
 
-        // partAnswers: { a: "9,0", b: "5" } — sent when frontend splits by part
-        // userAnswer: plain string — sent for single-part questions
         const partAnswers: { [key: string]: string } | null = answer.partAnswers || null;
         const userAnswer = partAnswers
           ? Object.entries(partAnswers)
@@ -121,7 +158,6 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         let finalResult;
 
         if (partAnswers && Object.keys(partAnswers).length > 0) {
-          // Per-part answers submitted — always use AI for clean per-part marking
           finalResult = await markAnswerWithAI(
             question.questionText,
             userAnswer,
@@ -130,7 +166,6 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
             question.marks
           );
         } else {
-          // Single answer — smart engine first
           const smartResult = markAnswer(userAnswer, correctAnswer, solutionText);
 
           if (smartResult.confidence === "exact" || smartResult.confidence === "numerical") {

@@ -19,45 +19,44 @@ export default function TopicPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"lessons" | "practice">("lessons");
+  const [isPremium, setIsPremium] = useState(false);
 
   useEffect(() => {
-    if (slug) fetchTopicData();
-  }, [slug]);
+    if (slug && !authLoading) fetchTopicData();
+  }, [slug, authLoading]);
 
   const fetchTopicData = async () => {
     setLoading(true);
     try {
-      // Fetch topic info
-      const topicRes = await fetch(`http://localhost:5000/api/topics/${slug}`);
+      const headers: any = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const [topicRes, lessonsRes, questionsRes, subRes] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/topics/${slug}`),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/topics/${slug}/lessons`),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/questions?topic=${slug}&count=5`, { headers }),
+        token
+          ? fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`, { headers })
+          : Promise.resolve(null),
+      ]);
+
       const topicData = await topicRes.json();
-
-      if (!topicData.success) {
-        setError("Topic not found.");
-        return;
-      }
-
+      if (!topicData.success) { setError("Topic not found."); return; }
       setTopic(topicData.data);
 
-      // Fetch lessons for this topic
-      const lessonsRes = await fetch(`http://localhost:5000/api/topics/${slug}/lessons`);
       const lessonsData = await lessonsRes.json();
       if (lessonsData.success) {
         setLessons(lessonsData.data);
-        if (lessonsData.data.length > 0) {
-          setActiveLesson(lessonsData.data[0]);
-        }
+        if (lessonsData.data.length > 0) setActiveLesson(lessonsData.data[0]);
       }
 
-      // Fetch practice questions for this topic
-      const questionsRes = await fetch(
-        `http://localhost:5000/api/questions?topic=${slug}&count=5`,
-        {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        }
-      );
       const questionsData = await questionsRes.json();
       if (questionsData.success) setQuestions(questionsData.data);
 
+      if (subRes) {
+        const subData = await subRes.json();
+        if (subData.success && subData.isPremium) setIsPremium(true);
+      }
     } catch (err) {
       setError("Failed to load topic.");
     } finally {
@@ -162,46 +161,55 @@ export default function TopicPage() {
               {lessons.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center">
                   <p className="text-4xl mb-3">📝</p>
-                  <p className="text-gray-500 text-sm font-semibold">
-                    Lessons coming soon
-                  </p>
-                  <p className="text-gray-400 text-xs mt-1">
-                    Content is being added for this topic
-                  </p>
+                  <p className="text-gray-500 text-sm font-semibold">Lessons coming soon</p>
+                  <p className="text-gray-400 text-xs mt-1">Content is being added for this topic</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {lessons.map((lesson: any, index: number) => (
-                    <button
-                      key={lesson.id}
-                      onClick={() => setActiveLesson(lesson)}
-                      className={`w-full text-left p-4 rounded-xl border transition ${
-                        activeLesson?.id === lesson.id
-                          ? "bg-brand-50 border-brand-300"
-                          : "bg-white border-gray-200 hover:border-brand-200"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  {lessons.map((lesson: any, index: number) => {
+                    const lessonLocked = !lesson.isFree && !isPremium;
+                    return (
+                      <button
+                        key={lesson.id}
+                        onClick={() => {
+                          if (lessonLocked) {
+                            window.location.href = "/upgrade";
+                            return;
+                          }
+                          setActiveLesson(lesson);
+                        }}
+                        className={`w-full text-left p-4 rounded-xl border transition ${
                           activeLesson?.id === lesson.id
-                            ? "bg-brand-700 text-white"
-                            : "bg-gray-100 text-gray-600"
-                        }`}>
-                          {index + 1}
+                            ? "bg-brand-50 border-brand-300"
+                            : "bg-white border-gray-200 hover:border-brand-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            activeLesson?.id === lesson.id
+                              ? "bg-brand-700 text-white"
+                              : "bg-gray-100 text-gray-600"
+                          }`}>
+                            {lessonLocked ? "🔒" : index + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {lesson.title}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {lesson.estimatedMinutes} min
+                              {lesson.videoUrl && " · 🎥 Video"}
+                              {lesson.isFree
+                                ? " · Free"
+                                : isPremium
+                                ? " · Premium"
+                                : " · 🔒 Premium"}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">
-                            {lesson.title}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {lesson.estimatedMinutes} min
-                            {lesson.videoUrl && " · 🎥 Video"}
-                            {lesson.isFree && " · Free"}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -229,56 +237,82 @@ export default function TopicPage() {
               {activeLesson ? (
                 <div className="space-y-6">
 
-                  {/* Video Player */}
-                  {activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
-                    <div className="bg-black rounded-2xl overflow-hidden aspect-video">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
-                        title={activeLesson.title}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="w-full h-full"
-                      />
+                  {/* Only show video and content if accessible */}
+                  {!activeLesson.isFree && !isPremium ? (
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow p-10 text-center">
+                      <div className="text-6xl mb-4">🔒</div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">Premium Lesson</h3>
+                      <p className="text-gray-500 mb-6">
+                        Upgrade to access all lessons and step-by-step solutions.
+                      </p>
+                      <a
+                        href="/upgrade"
+                        className="bg-brand-700 hover:bg-brand-600 text-white px-8 py-3 rounded-lg font-bold transition inline-block"
+                      >
+                        Upgrade from $3
+                      </a>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Video Player */}
+                      {activeLesson.videoUrl && getYouTubeId(activeLesson.videoUrl) && (
+                        <div className="bg-black rounded-2xl overflow-hidden aspect-video">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${getYouTubeId(activeLesson.videoUrl)}`}
+                            title={activeLesson.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="w-full h-full"
+                          />
+                        </div>
+                      )}
 
-                  {/* Lesson Image */}
-                  {activeLesson.imageUrl && (
-                    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
-                      <img
-                        src={activeLesson.imageUrl}
-                        alt={activeLesson.title}
-                        className="w-full h-auto rounded-lg object-contain max-h-[600px]"
-                        style={{ width: "auto", maxWidth: "100%" }}
-                      />
-                    </div>
-                  )}
+                      {/* Lesson Image */}
+                      {activeLesson.imageUrl && (
+                        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
+                          <img
+                            src={activeLesson.imageUrl}
+                            alt={activeLesson.title}
+                            className="w-full h-auto rounded-lg object-contain max-h-[600px]"
+                            style={{ width: "auto", maxWidth: "100%" }}
+                          />
+                        </div>
+                      )}
 
-                  {/* Lesson Content */}
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-bold text-gray-800">
-                        {activeLesson.title}
-                      </h2>
-                      <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                        {activeLesson.estimatedMinutes} min read
-                      </span>
-                    </div>
-                    <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
-                      <LessonMathContent>
-                        {activeLesson.content}
-                      </LessonMathContent>
-                    </div>
-                  </div>
+                      {/* Lesson Content */}
+                      <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-xl font-bold text-gray-800">
+                            {activeLesson.title}
+                          </h2>
+                          <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                            {activeLesson.estimatedMinutes} min read
+                          </span>
+                        </div>
+                        <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
+                          <LessonMathContent>
+                            {activeLesson.content}
+                          </LessonMathContent>
+                        </div>
+                      </div>
 
-                  {/* Next Lesson */}
-                  {lessons.indexOf(activeLesson) < lessons.length - 1 && (
-                    <button
-                      onClick={() => setActiveLesson(lessons[lessons.indexOf(activeLesson) + 1])}
-                      className="w-full bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition"
-                    >
-                      Next Lesson →
-                    </button>
+                      {/* Next Lesson */}
+                      {lessons.indexOf(activeLesson) < lessons.length - 1 && (
+                        <button
+                          onClick={() => {
+                            const next = lessons[lessons.indexOf(activeLesson) + 1];
+                            if (!next.isFree && !isPremium) {
+                              window.location.href = "/upgrade";
+                              return;
+                            }
+                            setActiveLesson(next);
+                          }}
+                          className="w-full bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition"
+                        >
+                          Next Lesson
+                        </button>
+                      )}
+                    </>
                   )}
 
                 </div>

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 
@@ -24,30 +24,51 @@ const topics = [
 
 export default function PracticePage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
   const [selectedTopic, setSelectedTopic] = useState("mixed");
   const [difficulty, setDifficulty] = useState("mixed");
   const [count, setCount] = useState("5");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isPremium, setIsPremium] = useState(false);
+
+  useEffect(() => {
+    if (authLoading || !token) return;
+    fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+      .then((r) => r.json())
+      .then((d) => { if (d.success && d.isPremium) setIsPremium(true); })
+      .catch(() => {});
+  }, [token, authLoading]);
 
   const handleStart = async () => {
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/practice/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          topicSlug: selectedTopic,
-          difficulty,
-          count: parseInt(count),
-        }),
-      });
+      // Get recently seen question IDs to avoid repeats
+      const recentIds: string[] = JSON.parse(
+        sessionStorage.getItem("recentQuestionIds") || "[]"
+      );
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/practice/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            topicSlug: selectedTopic,
+            difficulty,
+            count: parseInt(count),
+            excludeIds: recentIds,
+          }),
+        }
+      );
 
       const data = await res.json();
 
@@ -58,6 +79,12 @@ export default function PracticePage() {
           difficulty,
           count,
         }));
+
+        // Track recently seen question IDs to avoid repeats (keep last 50)
+        const newIds = data.data.map((q: any) => q.id);
+        const updatedIds = [...new Set([...recentIds, ...newIds])].slice(-50);
+        sessionStorage.setItem("recentQuestionIds", JSON.stringify(updatedIds));
+
         router.push("/practice/test");
       } else {
         setError(data.error || "Failed to generate test. Try different filters.");
@@ -72,7 +99,6 @@ export default function PracticePage() {
   return (
     <main className="min-h-screen bg-gray-50">
 
-      {/* Header */}
       <section className="bg-brand-800 text-white py-12 px-6 text-center">
         <h1 className="text-4xl font-bold mb-3">Smart Practice Mode</h1>
         <p className="text-brand-200 text-lg">
@@ -80,7 +106,6 @@ export default function PracticePage() {
         </p>
       </section>
 
-      {/* Setup Form */}
       <section className="max-w-2xl mx-auto px-6 py-10">
         <div className="bg-white rounded-2xl shadow p-8 border border-gray-200">
 
@@ -91,6 +116,36 @@ export default function PracticePage() {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
               ⚠️ {error}
+              {!isPremium && error.toLowerCase().includes("free") && (
+                <span className="ml-1">
+                  <a href="/upgrade" className="underline font-semibold">
+                    Upgrade to unlock all questions.
+                  </a>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Free vs Premium notice */}
+          {!isPremium && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-6">
+              <p className="text-sm text-yellow-800 font-medium">
+                🔒 Free plan: practice with free questions only
+              </p>
+              <p className="text-xs text-yellow-700 mt-1">
+                <a href="/upgrade" className="underline font-semibold">
+                  Upgrade from $3
+                </a>{" "}
+                to unlock all questions across all topics.
+              </p>
+            </div>
+          )}
+
+          {isPremium && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-6">
+              <p className="text-sm text-green-800 font-medium">
+                ✓ Premium — full access to all questions
+              </p>
             </div>
           )}
 
