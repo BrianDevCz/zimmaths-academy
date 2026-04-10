@@ -266,6 +266,9 @@ export default function PracticeTestPage() {
         return { questionId: q.id, userAnswer: typeof ans === "string" ? ans : "", partAnswers: null };
       });
 
+      // ADD THIS LINE:
+      console.log("Submitting:", JSON.stringify(answersArray, null, 2));
+      
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/practice/submit`,
         {

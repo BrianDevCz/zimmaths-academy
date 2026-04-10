@@ -132,6 +132,8 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
       });
     }
 
+    console.log(`Submit received — ${answers.length} answers`);
+
     const questionIds = answers.map((a: any) => a.questionId);
 
     const questions = await prisma.question.findMany({
@@ -139,7 +141,9 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
       include: { topic: { select: { name: true, slug: true } } },
     });
 
-    // Mark each answer — smart engine first, AI for uncertain cases
+    console.log(`Found ${questions.length} questions in DB`);
+
+    // Mark each answer
     const results = await Promise.all(
       answers.map(async (answer: any) => {
         const question = questions.find((q) => q.id === answer.questionId);
@@ -148,45 +152,101 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         const correctAnswer = (question as any).correctAnswer || question.solutionText || "";
         const solutionText = question.solutionText || "";
 
-        const partAnswers: { [key: string]: string } | null = answer.partAnswers || null;
+        // Get part answers — clean out any empty parts
+        let partAnswers: { [key: string]: string } | null = answer.partAnswers || null;
+        if (partAnswers) {
+          const cleaned: { [key: string]: string } = {};
+          for (const part of Object.keys(partAnswers)) {
+            const val = (partAnswers[part] || "").trim();
+            if (val) cleaned[part] = val;
+          }
+          // If no parts had actual answers, treat as no answer
+          partAnswers = Object.keys(cleaned).length > 0 ? cleaned : null;
+        }
+
+        // Build the combined user answer string
+        const rawSingleAnswer = (answer.userAnswer || "").trim();
         const userAnswer = partAnswers
           ? Object.entries(partAnswers)
               .map(([k, v]) => `(${k}) ${v}`)
               .join(" ")
-          : answer.userAnswer || "";
+          : rawSingleAnswer;
+
+        // Determine if any answer was actually given
+        const hasAnyAnswer = partAnswers !== null
+          ? Object.keys(partAnswers).length > 0
+          : rawSingleAnswer.length > 0;
+
+        console.log(`Q${question.questionNumber} — hasAnswer: ${hasAnyAnswer}, answer: "${userAnswer.slice(0, 60)}"`);
 
         let finalResult;
 
-        if (partAnswers && Object.keys(partAnswers).length > 0) {
-          finalResult = await markAnswerWithAI(
-            question.questionText,
-            userAnswer,
-            correctAnswer,
-            solutionText,
-            question.marks
-          );
+        // No answer given — always wrong, never call AI
+        if (!hasAnyAnswer) {
+          finalResult = {
+            isCorrect: false,
+            isPartiallyCorrect: false,
+            marksAwarded: 0,
+            totalMarks: question.marks,
+            confidence: "wrong" as const,
+            feedback: "No answer given.",
+            workingShown: false,
+            method: "smart" as const,
+            partResults: undefined,
+          };
         } else {
-          const smartResult = markAnswer(userAnswer, correctAnswer, solutionText);
+          try {
+            if (partAnswers && Object.keys(partAnswers).length > 0) {
+              console.log(`Using AI marking (${Object.keys(partAnswers).length} parts answered)...`);
+              finalResult = await markAnswerWithAI(
+                question.questionText,
+                userAnswer,
+                correctAnswer,
+                solutionText,
+                question.marks,
+                partAnswers
+              );
+            } else {
+              const smartResult = markAnswer(rawSingleAnswer, correctAnswer, solutionText);
+              console.log(`Smart marking confidence: ${smartResult.confidence}`);
 
-          if (smartResult.confidence === "exact" || smartResult.confidence === "numerical") {
+              if (smartResult.confidence === "exact" || smartResult.confidence === "numerical") {
+                finalResult = {
+                  isCorrect: smartResult.isCorrect,
+                  isPartiallyCorrect: false,
+                  marksAwarded: smartResult.isCorrect ? question.marks : 0,
+                  totalMarks: question.marks,
+                  confidence: smartResult.confidence,
+                  feedback: smartResult.feedback,
+                  workingShown: false,
+                  method: "smart" as const,
+                  partResults: undefined,
+                };
+              } else {
+                console.log("Using AI marking (ambiguous answer)...");
+                finalResult = await markAnswerWithAI(
+                  question.questionText,
+                  rawSingleAnswer,
+                  correctAnswer,
+                  solutionText,
+                  question.marks
+                );
+              }
+            }
+            console.log(`Marking done — isCorrect: ${finalResult.isCorrect}, marks: ${finalResult.marksAwarded}/${finalResult.totalMarks}`);
+          } catch (markErr) {
+            console.error(`Marking error for Q${question.questionNumber}:`, markErr);
             finalResult = {
-              isCorrect: smartResult.isCorrect,
+              isCorrect: false,
               isPartiallyCorrect: false,
-              marksAwarded: smartResult.isCorrect ? question.marks : 0,
+              marksAwarded: 0,
               totalMarks: question.marks,
-              confidence: smartResult.confidence,
-              feedback: smartResult.feedback,
+              confidence: "wrong" as const,
+              feedback: "Could not mark this answer automatically.",
               workingShown: false,
-              method: "smart",
+              method: "smart" as const,
+              partResults: undefined,
             };
-          } else {
-            finalResult = await markAnswerWithAI(
-              question.questionText,
-              userAnswer,
-              correctAnswer,
-              solutionText,
-              question.marks
-            );
           }
         }
 
@@ -208,10 +268,12 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
           topic: question.topic?.name,
           difficulty: question.difficulty,
           markingMethod: finalResult.method,
-          partResults: finalResult.partResults || [],
+          partResults: (finalResult as any).partResults || [],
         };
       })
     );
+
+    console.log("All questions marked — building summary");
 
     const validResults = results.filter(Boolean);
     const totalQuestions = validResults.length;
@@ -255,6 +317,8 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         },
       });
     }
+
+    console.log(`Submit complete — score: ${scorePercentage}%`);
 
     return res.json({
       success: true,
