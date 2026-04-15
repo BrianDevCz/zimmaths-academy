@@ -1,18 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 
-
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
 
   const verified = searchParams.get("verified");
 
-  const { user } = useAuth();
-  
   useEffect(() => {
     if (user) {
       const redirectTo = searchParams.get("redirect") || "/";
@@ -108,14 +105,12 @@ export default function LoginPage() {
             <p className="text-gray-500">Log in to continue studying</p>
           </div>
 
-          {/* Email verified success banner */}
           {verified && (
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-5 text-sm">
               ✅ Email verified! You can now log in.
             </div>
           )}
 
-          {/* Needs verification banner */}
           {needsVerification && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-4 rounded-lg mb-5 text-sm">
               <p className="font-semibold mb-1">Please verify your email first.</p>
@@ -136,7 +131,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-5 text-sm">
               ⚠️ {error}
@@ -202,5 +196,17 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
+        <div className="text-brand-600">Loading...</div>
+      </div>
+    }>
+      <LoginPageInner />
+    </Suspense>
   );
 }
