@@ -2,7 +2,7 @@
 import { useAuth } from "../context/AuthContext";
 
 export default function Footer() {
-  const { user } = useAuth();
+  const { user, isPremium } = useAuth();
 
   return (
     <footer className="bg-brand-900 text-brand-200 py-12 px-6">
@@ -39,7 +39,9 @@ export default function Footer() {
               <>
                 <li><a href="/profile" className="hover:text-white transition">My Profile</a></li>
                 <li><a href="/dashboard" className="hover:text-white transition">Dashboard</a></li>
-                <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
+                {!isPremium && (
+                  <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
+                )}
               </>
             ) : (
               <>

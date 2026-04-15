@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, isPremium } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
@@ -79,9 +79,16 @@ export default function Navbar() {
                   <a href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
                     👤 My Profile
                   </a>
-                  <a href="/upgrade" className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
-                    ⭐ Upgrade to Premium
-                  </a>
+                    {!isPremium && (
+                    <a href="/upgrade" className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
+                      ⭐ Upgrade to Premium
+                    </a>
+                  )}
+                  {isPremium && (
+                    <div className="block px-4 py-2 text-sm text-green-600 font-semibold">
+                      ✅ Premium Member
+                    </div>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition rounded-b-xl"
