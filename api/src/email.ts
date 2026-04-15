@@ -11,7 +11,7 @@ export async function sendVerificationEmail(
 ): Promise<boolean> {
   try {
     const verifyUrl = `${APP_URL}/verify-email?token=${token}`;
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: "Verify your ZimMaths Academy account",
@@ -41,9 +41,11 @@ export async function sendVerificationEmail(
         </div>
       `,
     });
+    console.log("Verification email sent:", JSON.stringify(result));
     return true;
-  } catch (error) {
-    console.error("Failed to send verification email:", error);
+  } catch (error: any) {
+    console.error("Failed to send verification email:", error?.message || error);
+    console.error("Resend error details:", JSON.stringify(error, null, 2));
     return false;
   }
 }
@@ -55,7 +57,7 @@ export async function sendPasswordResetEmail(
 ): Promise<boolean> {
   try {
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
       subject: "Reset your ZimMaths Academy password",
@@ -85,9 +87,11 @@ export async function sendPasswordResetEmail(
         </div>
       `,
     });
+    console.log("Password reset email sent:", JSON.stringify(result));
     return true;
-  } catch (error) {
-    console.error("Failed to send password reset email:", error);
+  } catch (error: any) {
+    console.error("Failed to send password reset email:", error?.message || error);
+    console.error("Resend error details:", JSON.stringify(error, null, 2));
     return false;
   }
 }

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 
 function TypewriterText() {
   const phrases = [
-    "Past papers explained step by step.",
+    "Practice papers explained step by step.",
     "AI tutor available 24/7.",
     "Daily challenges to keep you sharp.",
     "All 15 ZIMSEC topics covered.",

@@ -56,7 +56,9 @@ router.post("/register", async (req: Request, res: Response) => {
     });
 
     // Send verification email
-    await sendVerificationEmail(email, name, verifyToken);
+    console.log(`Sending verification email to: ${email}`);
+    const emailSent = await sendVerificationEmail(email, name, verifyToken);
+    console.log(`Email sent result: ${emailSent}`);
 
     return res.status(201).json({
       success: true,
