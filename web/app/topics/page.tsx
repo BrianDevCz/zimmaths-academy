@@ -1,6 +1,7 @@
+import { API_URL } from '@/app/lib/api';
 async function getTopics() {
   try {
-    const res = await fetch('http://localhost:5000/api/topics', {
+    const res = await fetch(`${API_URL}/api/topics`, {
       cache: 'no-store'
     });
     const data = await res.json();

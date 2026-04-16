@@ -1,8 +1,9 @@
+import { API_URL } from '@/app/lib/api';
 import QuestionCard from "./QuestionCard";
 
 async function getPaper(id: string) {
   try {
-    const res = await fetch("http://localhost:5000/api/papers/" + id, {
+    const res = await fetch("${API_URL}/api/papers/" + id, {
       cache: "no-store",
     });
     const data = await res.json();

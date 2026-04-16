@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ export default function DashboardPage() {
 
   const fetchDashboard = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/dashboard", {
+      const res = await fetch(`${API_URL}/api/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();

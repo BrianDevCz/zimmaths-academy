@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect } from "react";
 import MathContent from "../components/MathContent";
 import MathKeyboard from "../components/MathKeyboard";
@@ -37,7 +38,7 @@ export default function DailyChallengePage() {
 
   const fetchChallenge = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/daily/today");
+      const res = await fetch(`${API_URL}/api/daily/today`);
       const data = await res.json();
       if (data.success) setChallenge(data.data);
     } catch {
@@ -49,7 +50,7 @@ export default function DailyChallengePage() {
 
   const fetchYesterday = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/daily/yesterday");
+      const res = await fetch(`${API_URL}/api/daily/yesterday`);
       const data = await res.json();
       if (data.success) setYesterday(data.data);
     } catch {}
@@ -63,7 +64,7 @@ export default function DailyChallengePage() {
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/api/daily/attempt", {
+      const res = await fetch(`${API_URL}/api/daily/attempt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ challengeId: challenge.id, userAnswer: answer }),

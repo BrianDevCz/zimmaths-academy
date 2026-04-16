@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -104,7 +105,7 @@ export default function UpgradePage() {
         if (paymentInfo.pollUrl) {
           // Use Paynow direct poll
           const res = await fetch(
-            `http://localhost:5000/api/subscriptions/poll-paynow?pollUrl=${encodeURIComponent(paymentInfo.pollUrl)}`,
+            `${API_URL}/api/subscriptions/poll-paynow?pollUrl=${encodeURIComponent(paymentInfo.pollUrl)}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const data = await res.json();
@@ -113,7 +114,7 @@ export default function UpgradePage() {
         } else {
           // Fall back to checking by reference
           const res = await fetch(
-            `http://localhost:5000/api/subscriptions/status/${paymentInfo.paymentRef}`,
+            `${API_URL}/api/subscriptions/status/${paymentInfo.paymentRef}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const data = await res.json();
@@ -168,7 +169,7 @@ export default function UpgradePage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/subscriptions/initiate-paynow", {
+      const res = await fetch(`${API_URL}/api/subscriptions/initiate-paynow`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

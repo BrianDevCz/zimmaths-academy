@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -110,7 +111,7 @@ export default function AdminPage() {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/admin/stats", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/stats`, { headers: getHeaders() });
       if (res.status === 403) { router.push("/"); return; }
       const data = await res.json();
       if (data.success) setStats(data.data);
@@ -121,7 +122,7 @@ export default function AdminPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/users", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/users`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setUsers(data.data);
     } catch { setError("Failed to load users."); }
@@ -129,7 +130,7 @@ export default function AdminPage() {
 
   const fetchPapers = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/papers", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/papers`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setPapers(data.data);
     } catch { setError("Failed to load papers."); }
@@ -137,7 +138,7 @@ export default function AdminPage() {
 
   const fetchQuestions = async (paperId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/questions?paperId=${paperId}`, { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/questions?paperId=${paperId}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setQuestions(data.data);
     } catch { setError("Failed to load questions."); }
@@ -145,7 +146,7 @@ export default function AdminPage() {
 
   const fetchPracticeQuestions = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/questions?practiceOnly=true", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/questions?practiceOnly=true`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setPracticeQuestions(data.data);
     } catch { setError("Failed to load practice questions."); }
@@ -154,8 +155,8 @@ export default function AdminPage() {
   const fetchLessons = async (topicId?: string) => {
     try {
       const url = topicId
-        ? `http://localhost:5000/api/admin/lessons?topicId=${topicId}`
-        : "http://localhost:5000/api/admin/lessons";
+        ? `${API_URL}/api/admin/lessons?topicId=${topicId}`
+        : `${API_URL}/api/admin/lessons`;
       const res = await fetch(url, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setLessons(data.data);
@@ -164,7 +165,7 @@ export default function AdminPage() {
 
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/admin/subscriptions", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/subscriptions`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setSubscriptions(data.data);
     } catch { setError("Failed to load subscriptions."); }
@@ -172,7 +173,7 @@ export default function AdminPage() {
 
   const fetchTopics = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/topics", { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/topics`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setTopics(data.data);
     } catch {}
@@ -181,7 +182,7 @@ export default function AdminPage() {
   const handleAddPaper = async () => {
     setFormError(""); setFormMessage("");
     try {
-      const res = await fetch("http://localhost:5000/api/admin/papers", {
+      const res = await fetch(`${API_URL}/api/admin/papers`, {
         method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...paperForm,
@@ -201,7 +202,7 @@ export default function AdminPage() {
   const handleAddQuestion = async () => {
     setFormError(""); setFormMessage("");
     try {
-      const res = await fetch("http://localhost:5000/api/admin/questions", {
+      const res = await fetch(`${API_URL}/api/admin/questions`, {
         method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...questionForm,
@@ -249,7 +250,7 @@ export default function AdminPage() {
   const handleUpdateQuestion = async () => {
     setFormError(""); setFormMessage("");
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/questions/${editingQuestionId}`, {
+      const res = await fetch(`${API_URL}/api/admin/questions/${editingQuestionId}`, {
         method: "PUT", headers: getHeaders(),
         body: JSON.stringify({
           ...questionForm,
@@ -276,7 +277,7 @@ export default function AdminPage() {
   const handleAddLesson = async () => {
     setFormError(""); setFormMessage("");
     try {
-      const res = await fetch("http://localhost:5000/api/admin/lessons", {
+      const res = await fetch(`${API_URL}/api/admin/lessons`, {
         method: "POST", headers: getHeaders(),
         body: JSON.stringify({
           ...lessonForm,
@@ -314,7 +315,7 @@ export default function AdminPage() {
   const handleUpdateLesson = async () => {
     setFormError(""); setFormMessage("");
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/lessons/${editingLessonId}`, {
+      const res = await fetch(`${API_URL}/api/admin/lessons/${editingLessonId}`, {
         method: "PUT", headers: getHeaders(),
         body: JSON.stringify({
           ...lessonForm,
@@ -338,7 +339,7 @@ export default function AdminPage() {
   const handleDeletePaper = async (id: string) => {
     if (!confirm("Delete this paper and all its questions?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/papers/${id}`, { method: "DELETE", headers: getHeaders() });
+      await fetch(`${API_URL}/api/admin/papers/${id}`, { method: "DELETE", headers: getHeaders() });
       fetchPapers();
     } catch { setError("Failed to delete paper."); }
   };
@@ -346,7 +347,7 @@ export default function AdminPage() {
   const handleDeleteQuestion = async (id: string) => {
     if (!confirm("Delete this question?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() });
+      await fetch(`${API_URL}/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() });
       if (selectedPaperId) fetchQuestions(selectedPaperId);
       fetchPracticeQuestions();
     } catch { setError("Failed to delete question."); }
@@ -355,7 +356,7 @@ export default function AdminPage() {
   const handleDeleteLesson = async (id: string) => {
     if (!confirm("Delete this lesson?")) return;
     try {
-      await fetch(`http://localhost:5000/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() });
+      await fetch(`${API_URL}/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() });
       fetchLessons();
     } catch { setError("Failed to delete lesson."); }
   };
@@ -407,7 +408,7 @@ export default function AdminPage() {
     setImportLoading(true);
     setImportResult(null);
     try {
-      const res = await fetch("http://localhost:5000/api/admin/questions/import", {
+      const res = await fetch(`${API_URL}/api/admin/questions/import`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ questions: csvPreview }),
@@ -431,7 +432,7 @@ export default function AdminPage() {
 
   const handleActivateSubscription = async (userId: string, plan: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/subscriptions/${userId}/activate`, {
+      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/activate`, {
         method: "PUT", headers: getHeaders(),
         body: JSON.stringify({ plan }),
       });

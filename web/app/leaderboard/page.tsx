@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 
@@ -29,7 +30,7 @@ export default function LeaderboardPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`http://localhost:5000/api/leaderboard/${p}`, {
+      const res = await fetch(`${API_URL}/api/leaderboard/${p}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

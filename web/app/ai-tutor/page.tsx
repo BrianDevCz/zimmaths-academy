@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -56,7 +57,7 @@ useEffect(() => {
   const fetchSuggestions = async () => {
     try {
       const token = localStorage.getItem("zim_token");
-const res = await fetch("http://localhost:5000/api/ai/suggestions", {
+const res = await fetch(`${API_URL}/api/ai/suggestions`, {
   headers: {
     "Authorization": `Bearer ${token}`,
   },
@@ -91,7 +92,7 @@ const res = await fetch("http://localhost:5000/api/ai/suggestions", {
 
     try {
       const token = localStorage.getItem("zim_token");
-      const res = await fetch("http://localhost:5000/api/ai/chat", {
+      const res = await fetch(`${API_URL}/api/ai/chat`, {
     method: "POST",
   headers: {
     "Content-Type": "application/json",

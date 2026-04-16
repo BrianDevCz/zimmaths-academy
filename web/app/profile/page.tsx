@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from '@/app/lib/api';
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -30,8 +31,8 @@ export default function ProfilePage() {
       const headers = { Authorization: `Bearer ${token}` };
 
       const [dashRes, subRes] = await Promise.all([
-        fetch("http://localhost:5000/api/dashboard", { headers }),
-        fetch("http://localhost:5000/api/subscriptions/status", { headers }),
+        fetch(`${API_URL}/api/dashboard`, { headers }),
+        fetch(`${API_URL}/api/subscriptions/status`, { headers }),
       ]);
 
       const dashData = await dashRes.json();
@@ -59,7 +60,7 @@ export default function ProfilePage() {
     setSaveError("");
     setSaveMessage("");
     try {
-      const res = await fetch("http://localhost:5000/api/auth/me/update", {
+      const res = await fetch(`${API_URL}/api/auth/me/update`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
