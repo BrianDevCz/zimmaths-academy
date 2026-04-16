@@ -27,6 +27,17 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
+// Cookie helpers
+function setCookie(name: string, value: string, days: number) {
+  const expires = new Date();
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+}
+
+function deleteCookie(name: string) {
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -39,7 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
-      // Check subscription status
+      // Ensure cookie is set (in case it was cleared)
+      setCookie("zim_token", storedToken, 7);
       checkSubscription(storedToken);
     }
     setLoading(false);
@@ -67,7 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
     localStorage.setItem("zim_token", newToken);
     localStorage.setItem("zim_user", JSON.stringify(newUser));
-    // Check subscription after login
+    // Also set cookie so middleware can read it
+    setCookie("zim_token", newToken, 7);
     checkSubscription(newToken);
   };
 
@@ -77,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsPremium(false);
     localStorage.removeItem("zim_token");
     localStorage.removeItem("zim_user");
+    deleteCookie("zim_token");
   };
 
   return (

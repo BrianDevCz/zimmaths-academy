@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { AuthProvider } from "./context/AuthContext";
+import { SessionProvider } from "./components/SessionProvider";
 import 'katex/dist/katex.min.css';
 
 const inter = Inter({ subsets: ["latin"] });
@@ -44,11 +45,13 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} bg-gray-50`}>
-        <AuthProvider>
-          <Navbar />
-          <div className="min-h-screen">{children}</div>
-          <Footer />
-        </AuthProvider>
+        <SessionProvider>
+          <AuthProvider>
+            <Navbar />
+            <div className="min-h-screen">{children}</div>
+            <Footer />
+          </AuthProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -12,6 +12,7 @@
     "@uploadcare/react-uploader": "^1.13.0",
     "katex": "^0.16.39",
     "next": "^16.2.0",
+    "next-auth": "^4.24.14",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-katex": "^3.1.0",

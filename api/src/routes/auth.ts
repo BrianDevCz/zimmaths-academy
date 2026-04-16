@@ -396,4 +396,59 @@ router.put("/me/update", async (req: Request, res: Response) => {
   }
 });
 
+// ── Google OAuth Login ────────────────────────────────────────
+router.post("/google", async (req: Request, res: Response) => {
+  try {
+    const { email, name, googleId, avatar } = req.body;
+
+    if (!email || !googleId) {
+      return res.status(400).json({ success: false, error: "Invalid Google data." });
+    }
+
+    // Check if user exists
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      // Create new user — no password needed for Google users
+      user = await prisma.user.create({
+        data: {
+          name: name || email.split("@")[0],
+          email,
+          passwordHash: googleId, // use googleId as placeholder
+          emailVerified: true, // Google already verified the email
+          grade: null,
+        },
+      });
+    } else if (!user.emailVerified) {
+      // Mark existing user as verified since Google confirmed the email
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "7d" }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        grade: user.grade,
+        role: user.role,
+        avatarColour: user.avatarColour,
+      },
+    });
+  } catch (error) {
+    console.error("Google auth error:", error);
+    return res.status(500).json({ success: false, error: "Google login failed." });
+  }
+});
+
 export default router;
