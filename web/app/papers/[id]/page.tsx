@@ -3,7 +3,7 @@ import QuestionCard from "./QuestionCard";
 
 async function getPaper(id: string) {
   try {
-    const res = await fetch("${API_URL}/api/papers/" + id, {
+    const res = await fetch(`${API_URL}/api/papers/` + id, {
       cache: "no-store",
     });
     const data = await res.json();
