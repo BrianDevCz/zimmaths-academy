@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { API_URL } from "@/app/lib/api";
 
 export default function PapersPage() {
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, isPremium } = useAuth();
   const [papers, setPapers] = useState<any[]>([]);
-  const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
   const [yearFilter, setYearFilter] = useState("all");
   const [sessionFilter, setSessionFilter] = useState("all");
@@ -19,26 +19,9 @@ export default function PapersPage() {
         const headers: any = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const [papersRes, subRes] = await Promise.all([
-          fetch(
-            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/papers`,
-            { headers }
-          ),
-          token
-            ? fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`,
-                { headers }
-              )
-            : Promise.resolve(null),
-        ]);
-
+        const papersRes = await fetch(`${API_URL}/api/papers`, { headers });
         const papersData = await papersRes.json();
         if (papersData.success) setPapers(papersData.data || []);
-
-        if (subRes) {
-          const subData = await subRes.json();
-          if (subData.success && subData.isPremium) setIsPremium(true);
-        }
       } catch (err) {
         console.error("Failed to load papers:", err);
       } finally {
@@ -131,8 +114,8 @@ export default function PapersPage() {
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="text-xl font-bold text-gray-800 capitalize">
-                        {paper.session} {paper.year}
+                      <h3 className="text-xl font-bold text-gray-800">
+                        {paper.title || `${paper.session} ${paper.year}`}
                       </h3>
                       <p className="text-gray-500">Paper {paper.paperNumber}</p>
                     </div>
