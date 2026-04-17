@@ -2,7 +2,7 @@
 import MathContent from "../../components/MathContent";
 import Link from "next/link";
 import { useAuth } from "../../context/AuthContext";
-import { useEffect, useState } from "react";
+import { API_URL } from "@/app/lib/api";
 
 export default function QuestionCard({
   question,
@@ -11,19 +11,7 @@ export default function QuestionCard({
   question: any;
   paperId: string;
 }) {
-  const { token, loading: authLoading } = useAuth();
-  const [isPremium, setIsPremium] = useState(false);
-
-  useEffect(() => {
-    if (authLoading || !token) return;
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-      .then((r) => r.json())
-      .then((d) => { if (d.success && d.isPremium) setIsPremium(true); })
-      .catch(() => {});
-  }, [token, authLoading]);
+  const { token, isPremium } = useAuth();
 
   const canAccess = question.isFree || isPremium;
 
@@ -102,7 +90,7 @@ export default function QuestionCard({
             🔒 Sign in to View Solution
           </Link>
         )}
-        
+
         <a
           href={`https://wa.me/?text=Can you solve this ZIMSEC Maths question? ${encodeURIComponent(question.questionText)} - See solution at zimmaths.com`}
           target="_blank"
