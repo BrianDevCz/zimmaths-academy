@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "../context/AuthContext";
 
-const WHATSAPP_NUMBER = "263000000000";
+const WHATSAPP_NUMBER = "263714390637";
 const WHATSAPP_MESSAGE = "Hello ZimMaths Academy! I need help with:";
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 
