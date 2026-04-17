@@ -18,7 +18,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const papers = await prisma.paper.findMany({
       where,
-      orderBy: [{ year: 'desc' }, { session: 'asc' }],
+      orderBy: [{ title: 'asc' }],
       include: {
         _count: { select: { questions: true } }
       }
