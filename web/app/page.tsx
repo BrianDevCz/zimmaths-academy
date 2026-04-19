@@ -52,7 +52,7 @@ export default function Home() {
       <section className="bg-brand-800 text-white pt-6 pb-24 px-6 text-center">
         <div className="max-w-4xl mx-auto">
           <span className="bg-brand-600 text-brand-100 text-lg font-semibold px-6 py-3 rounded-full mb-6 inline-block mt-0">
-            🎓 Built specifically for ZIMSEC O-Level Students
+            🎓 Built specifically for Maths O-Level Students
           </span>
           <h1 className="text-5xl font-bold mb-4 mt-4">Pass ZIMSEC Maths.</h1>
           <h1 className="text-5xl font-bold mb-6 text-brand-300">Build Your Future.</h1>
