@@ -18,10 +18,16 @@ router.get('/', async (req: Request, res: Response) => {
 
     const papers = await prisma.paper.findMany({
       where,
-      orderBy: [{ createdAt: 'asc' }],
       include: {
         _count: { select: { questions: true } }
       }
+    });
+
+    // Natural sort by title (Practice 1, Practice 2, ... Practice 10, Practice 11)
+    papers.sort((a, b) => {
+      const numA = parseInt(a.title.match(/\d+/)?.[0] || '0');
+      const numB = parseInt(b.title.match(/\d+/)?.[0] || '0');
+      return numA - numB;
     });
 
     res.json({
