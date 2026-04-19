@@ -1,7 +1,6 @@
 "use client";
 import { API_URL } from '@/app/lib/api';
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -13,8 +12,16 @@ interface Message {
   content: string;
 }
 
+// Convert LaTeX bracket notation to dollar sign notation for KaTeX
+const fixMath = (text: string) => {
+  return text
+    .replace(/\\\[/g, '$$')
+    .replace(/\\\]/g, '$$')
+    .replace(/\\\(/g, '$')
+    .replace(/\\\)/g, '$');
+};
+
 export default function AITutorPage() {
-  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,22 +53,20 @@ export default function AITutorPage() {
 
   const isFirstLoad = useRef(true);
 
-useEffect(() => {
-  if (isFirstLoad.current) {
-    isFirstLoad.current = false;
-    return;
-  }
-  messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messages]);
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const fetchSuggestions = async () => {
     try {
       const token = localStorage.getItem("zim_token");
-const res = await fetch(`${API_URL}/api/ai/suggestions`, {
-  headers: {
-    "Authorization": `Bearer ${token}`,
-  },
-});
+      const res = await fetch(`${API_URL}/api/ai/suggestions`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
       const data = await res.json();
       if (data.success) setSuggestions(data.data);
     } catch (err) {
@@ -93,16 +98,16 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
     try {
       const token = localStorage.getItem("zim_token");
       const res = await fetch(`${API_URL}/api/ai/chat`, {
-    method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`,
-  },
-  body: JSON.stringify({
-    message: text,
-    history: messages.slice(-6),
-  }),
-});
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: text,
+          history: messages.slice(-6),
+        }),
+      });
       const data = await res.json();
 
       if (data.success) {
@@ -110,7 +115,7 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
           ...prev,
           {
             role: "assistant",
-            content: data.message,
+            content: fixMath(data.message),
           },
         ]);
         const newCount = questionsUsed + 1;
@@ -130,8 +135,7 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
         ...prev,
         {
           role: "assistant",
-          content:
-            "Connection error. Please check your internet and try again.",
+          content: "Connection error. Please check your internet and try again.",
         },
       ]);
     } finally {
@@ -197,9 +201,7 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={
-              "flex " + (msg.role === "user" ? "justify-end" : "justify-start")
-            }
+            className={"flex " + (msg.role === "user" ? "justify-end" : "justify-start")}
           >
             {msg.role === "assistant" && (
               <div className="w-8 h-8 bg-brand-600 rounded-full flex items-center justify-center text-sm mr-2 flex-shrink-0 mt-1">
@@ -214,7 +216,6 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
                   : "bg-white text-gray-800 shadow border border-gray-100 rounded-bl-sm")
               }
             >
-              {/* 🔁 REPLACED: old renderMaths with ReactMarkdown */}
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
@@ -239,14 +240,8 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
             <div className="bg-white shadow border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm">
               <div className="flex gap-1">
                 <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce"></div>
-                <div
-                  className="w-2 h-2 bg-brand-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "0.2s" }}
-                ></div>
-                <div
-                  className="w-2 h-2 bg-brand-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "0.4s" }}
-                ></div>
+                <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
               </div>
             </div>
           </div>
@@ -264,7 +259,7 @@ const res = await fetch(`${API_URL}/api/ai/suggestions`, {
                 Daily limit reached — upgrade for unlimited AI tutoring
               </p>
               <a
-                href="/register"
+                href="/upgrade"
                 className="bg-brand-700 text-white px-4 py-1 rounded-lg text-sm font-semibold"
               >
                 Upgrade $3
