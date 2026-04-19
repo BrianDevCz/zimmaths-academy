@@ -36,7 +36,7 @@ const buttonGroups = [
     ],
   },
   {
-    label: "Fractions & Mixed",
+    label: "Fractions",
     buttons: [
       { label: "a/b", insert: "\\frac{}{}", cursor: -1 },
       { label: "1½", insert: " \\frac{}{}", cursor: -1 },
@@ -44,6 +44,8 @@ const buttonGroups = [
       { label: "⅓", insert: "\\frac{1}{3}" },
       { label: "¼", insert: "\\frac{1}{4}" },
       { label: "¾", insert: "\\frac{3}{4}" },
+      { label: "⅔", insert: "\\frac{2}{3}" },
+      { label: "⅕", insert: "\\frac{1}{5}" },
     ],
   },
   {
@@ -51,10 +53,72 @@ const buttonGroups = [
     buttons: [
       { label: "x²", insert: "^{2}" },
       { label: "x³", insert: "^{3}" },
-      { label: "xⁿ", insert: "^{}" , cursor: -1 },
+      { label: "xⁿ", insert: "^{}", cursor: -1 },
       { label: "√", insert: "\\sqrt{}", cursor: -1 },
       { label: "∛", insert: "\\sqrt[3]{}", cursor: -1 },
+      { label: "ⁿ√", insert: "\\sqrt[]{}", cursor: -1 },
       { label: "x₁", insert: "_{}", cursor: -1 },
+      { label: "10ⁿ", insert: "10^{}", cursor: -1 },
+    ],
+  },
+  {
+    label: "Trigonometry",
+    buttons: [
+      { label: "sin", insert: "\\sin(" },
+      { label: "cos", insert: "\\cos(" },
+      { label: "tan", insert: "\\tan(" },
+      { label: "sin⁻¹", insert: "\\sin^{-1}(" },
+      { label: "cos⁻¹", insert: "\\cos^{-1}(" },
+      { label: "tan⁻¹", insert: "\\tan^{-1}(" },
+      { label: "°", insert: "^{\\circ}" },
+      { label: "π", insert: "\\pi" },
+    ],
+  },
+  {
+    label: "Geometry",
+    buttons: [
+      { label: "∠", insert: "\\angle " },
+      { label: "△", insert: "\\triangle " },
+      { label: "⊥", insert: "\\perp " },
+      { label: "∥", insert: "\\parallel " },
+      { label: "≅", insert: "\\cong " },
+      { label: "~", insert: "\\sim " },
+      { label: "AB²", insert: "^{2}" },
+      { label: "½bh", insert: "\\frac{1}{2}bh" },
+    ],
+  },
+  {
+    label: "Sets",
+    buttons: [
+      { label: "∪", insert: "\\cup " },
+      { label: "∩", insert: "\\cap " },
+      { label: "∈", insert: "\\in " },
+      { label: "∉", insert: "\\notin " },
+      { label: "⊂", insert: "\\subset " },
+      { label: "⊆", insert: "\\subseteq " },
+      { label: "∅", insert: "\\emptyset " },
+      { label: "ξ", insert: "\\xi " },
+      { label: "A'", insert: "A'" },
+      { label: "n(A)", insert: "n(A)" },
+      { label: "{}", insert: "\\{\\}", cursor: -1 },
+      { label: "∞", insert: "\\infty " },
+    ],
+  },
+  {
+    label: "Statistics",
+    buttons: [
+      { label: "x̄", insert: "\\bar{x}" },
+      { label: "Σ", insert: "\\sum " },
+      { label: "Σfx", insert: "\\sum fx" },
+      { label: "Σf", insert: "\\sum f" },
+      { label: "σ", insert: "\\sigma " },
+      { label: "f", insert: "f" },
+      { label: "fx", insert: "fx" },
+      { label: "Q₁", insert: "Q_{1}" },
+      { label: "Q₂", insert: "Q_{2}" },
+      { label: "Q₃", insert: "Q_{3}" },
+      { label: "IQR", insert: "IQR" },
+      { label: "P(A)", insert: "P(A)" },
     ],
   },
   {
@@ -72,14 +136,16 @@ const buttonGroups = [
     ],
   },
   {
-    label: "Geometry",
+    label: "Financial",
     buttons: [
-      { label: "°", insert: "^{\\circ}" },
-      { label: "π", insert: "\\pi" },
-      { label: "∠", insert: "\\angle " },
-      { label: "△", insert: "\\triangle " },
-      { label: "⊥", insert: "\\perp " },
-      { label: "∥", insert: "\\parallel " },
+      { label: "%", insert: "\\%" },
+      { label: "$", insert: "\\$" },
+      { label: "P×R×T", insert: "P \\times R \\times T" },
+      { label: "SI", insert: "SI = \\frac{PRT}{100}" },
+      { label: "CI", insert: "A = P\\left(1 + \\frac{r}{100}\\right)^{n}" },
+      { label: "Dep", insert: "A = P\\left(1 - \\frac{r}{100}\\right)^{n}" },
+      { label: "Profit%", insert: "\\frac{\\text{profit}}{\\text{cost}} \\times 100" },
+      { label: "Loss%", insert: "\\frac{\\text{loss}}{\\text{cost}} \\times 100" },
     ],
   },
   {
@@ -97,6 +163,7 @@ const buttonGroups = [
     buttons: [
       { label: "x", insert: "x" }, { label: "y", insert: "y" }, { label: "z", insert: "z" },
       { label: "a", insert: "a" }, { label: "b", insert: "b" }, { label: "n", insert: "n" },
+      { label: "k", insert: "k" }, { label: "r", insert: "r" }, { label: "t", insert: "t" },
       { label: "θ", insert: "\\theta " }, { label: "α", insert: "\\alpha " }, { label: "β", insert: "\\beta " },
     ],
   },
@@ -119,7 +186,6 @@ export default function MathKeyboard({ value, onChange, placeholder }: MathKeybo
     const newValue = value.substring(0, start) + insert + value.substring(end);
     onChange(newValue);
 
-    // Move cursor inside braces if needed
     const newCursor = cursorOffset !== undefined
       ? start + insert.length + cursorOffset
       : start + insert.length;
@@ -160,27 +226,27 @@ export default function MathKeyboard({ value, onChange, placeholder }: MathKeybo
   return (
     <div className="w-full">
       {/* Rendered Answer Display */}
-<div
-  onClick={() => { setShowKeyboard(true); textareaRef.current?.focus(); }}
-  className="w-full min-h-[56px] border-2 border-brand-400 rounded-lg px-4 py-3 bg-white cursor-text flex items-center"
->
-  {value ? (
-    <MathContent>{value.includes("$") ? value : `$${value}$`}</MathContent>
-  ) : (
-    <span className="text-gray-400 text-sm">{placeholder || "Tap buttons below or type your answer..."}</span>
-  )}
-</div>
+      <div
+        onClick={() => { setShowKeyboard(true); textareaRef.current?.focus(); }}
+        className="w-full min-h-[56px] border-2 border-brand-400 rounded-lg px-4 py-3 bg-white cursor-text flex items-center"
+      >
+        {value ? (
+          <MathContent>{value.includes("$") ? value : `$${value}$`}</MathContent>
+        ) : (
+          <span className="text-gray-400 text-sm">{placeholder || "Tap buttons below or type your answer..."}</span>
+        )}
+      </div>
 
-{/* Hidden textarea for keyboard input */}
-<textarea
-  ref={textareaRef}
-  value={value}
-  onChange={(e) => onChange(e.target.value)}
-  onFocus={() => setShowKeyboard(true)}
-  rows={1}
-  className="w-full border border-gray-200 rounded-lg px-3 py-1 text-gray-500 text-xs font-mono mt-1 resize-none focus:outline-none focus:border-brand-300"
-  placeholder="Raw input (advanced)"
-/>
+      {/* Hidden textarea for keyboard input */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setShowKeyboard(true)}
+        rows={1}
+        className="w-full border border-gray-200 rounded-lg px-3 py-1 text-gray-500 text-xs font-mono mt-1 resize-none focus:outline-none focus:border-brand-300"
+        placeholder="Raw input (advanced)"
+      />
 
       {/* Toggle Keyboard */}
       <button
