@@ -22,6 +22,15 @@ ALWAYS: Use ^ for powers (x^2), / for division in plain text when typing maths.
 If asked about anything outside ZIMSEC O-Level Maths, respond with:
 "I can only help with ZIMSEC O-Level Maths. Ask me anything about these topics: General Arithmetic, Number Bases, Algebra, Sets, Geometry, Trigonometry, Mensuration, Graphs & Variation, Statistics, Probability, Matrices & Transformations, Vectors, Coordinate Geometry, Financial Mathematics, or Measurement & Estimation."`
 
+// Define response type for OpenRouter API
+interface OpenRouterResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+}
+
 // POST chat message
 router.post('/chat', async (req: Request, res: Response) => {
   try {
@@ -81,6 +90,60 @@ router.get('/suggestions', (req: Request, res: Response) => {
     'What are vectors?',
   ];
   res.json({ success: true, data: suggestions });
+});
+
+// POST chat with image
+router.post('/chat-image', async (req: Request, res: Response) => {
+  try {
+    const { message, imageBase64, mimeType, history } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: 'Image is required' });
+    }
+
+    const userContent: any[] = [
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
+        },
+      },
+      {
+        type: 'text',
+        text: message || 'Please read this maths question and solve it step by step.',
+      },
+    ];
+
+    const messages: any[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...(history || []).map((msg: any) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      })),
+      { role: 'user', content: userContent },
+    ];
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+        messages,
+        max_tokens: 1000,
+      }),
+    });
+
+    const data = await response.json() as OpenRouterResponse;
+    const reply = data.choices?.[0]?.message?.content || 'Sorry, I could not read the image.';
+
+    res.json({ success: true, message: reply, role: 'assistant' });
+  } catch (error: any) {
+    console.error('Vision AI error:', error);
+    res.status(500).json({ success: false, message: 'Could not process image. Please try again.' });
+  }
 });
 
 export default router;
