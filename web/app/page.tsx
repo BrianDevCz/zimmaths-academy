@@ -134,7 +134,7 @@ export default function Home() {
       <section className="py-20 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Everything You Need To Pass</h2>
-          <p className="text-center text-gray-500 mb-12 text-lg">One platform. All the tools. Designed for ZIMSEC.</p>
+          <p className="text-center text-gray-500 mb-12 text-lg">One platform. All the tools. Designed for ZIMSEC students.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
               <div className="text-4xl mb-4">📄</div>
@@ -228,7 +228,7 @@ export default function Home() {
             <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 flex flex-col">
               <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
               <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
-              <p className="text-gray-400 text-sm mb-6">Forever free</p>
+              <p className="text-gray-400 text-sm mb-6">You can start for free.</p>
               <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
                 <li>✅ 5 past exam papers</li>
                 <li>✅ Daily maths challenge</li>
@@ -312,7 +312,7 @@ export default function Home() {
               Browse Topics
             </a>
           </div>
-          <p className="text-brand-400 text-sm mt-6">No credit card required. Free forever.</p>
+          <p className="text-brand-400 text-sm mt-6">No credit card required to start.</p>
         </div>
       </section>
 
