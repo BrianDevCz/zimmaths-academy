@@ -192,15 +192,14 @@ router.post('/chat-image', async (req: Request, res: Response) => {
       },
       {
         type: 'text',
-        text: message || 'Please read this maths question from the image and solve it step by step, showing all working.',
+        text: `You are a ZIMSEC O-Level Mathematics tutor. Read the maths question in this image carefully and solve it step by step. Show all working clearly. Give the correct mathematical answer only.\n\n${message || ''}`,
       },
     ];
 
     const messages: any[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
       ...(history || []).map((msg: any) => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content,
+        content: typeof msg.content === 'string' ? msg.content : '',
       })),
       { role: 'user', content: userContent },
     ];
