@@ -1,6 +1,7 @@
 "use client";
 import { API_URL } from '@/app/lib/api';
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -10,7 +11,7 @@ import "katex/dist/katex.min.css";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  image?: string; // base64 preview for display
+  image?: string;
 }
 
 const fixMath = (text: string) => {
@@ -22,6 +23,7 @@ const fixMath = (text: string) => {
 };
 
 export default function AITutorPage() {
+  const { isPremium } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,7 @@ export default function AITutorPage() {
     const text = messageText || input.trim();
     if ((!text && !selectedImage) || loading) return;
 
-    if (questionsUsed >= FREE_LIMIT) {
+    if (questionsUsed >= FREE_LIMIT && !isPremium) {
       setMessages((prev) => [...prev, {
         role: "assistant",
         content: "You've used your 5 free questions for today! Upgrade to Premium for unlimited AI tutoring. Come back tomorrow for 5 more free questions. 🔓",
@@ -119,11 +121,9 @@ export default function AITutorPage() {
 
     try {
       const token = localStorage.getItem("zim_token");
-
       let res: Response;
 
       if (imageToSend) {
-        // Use vision endpoint
         res = await fetch(`${API_URL}/api/ai/chat-image`, {
           method: "POST",
           headers: {
@@ -138,7 +138,6 @@ export default function AITutorPage() {
           }),
         });
       } else {
-        // Use text endpoint
         res = await fetch(`${API_URL}/api/ai/chat`, {
           method: "POST",
           headers: {
@@ -159,9 +158,11 @@ export default function AITutorPage() {
           role: "assistant",
           content: fixMath(data.message),
         }]);
-        const newCount = questionsUsed + 1;
-        setQuestionsUsed(newCount);
-        localStorage.setItem("aiUsageCount", newCount.toString());
+        if (!isPremium) {
+          const newCount = questionsUsed + 1;
+          setQuestionsUsed(newCount);
+          localStorage.setItem("aiUsageCount", newCount.toString());
+        }
       } else {
         setMessages((prev) => [...prev, {
           role: "assistant",
@@ -185,6 +186,8 @@ export default function AITutorPage() {
     }
   };
 
+  const limitReached = questionsUsed >= FREE_LIMIT && !isPremium;
+
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
@@ -198,8 +201,10 @@ export default function AITutorPage() {
             </div>
           </div>
           <div className="bg-brand-700 px-4 py-2 rounded-lg text-center">
-            <p className="text-brand-200 text-xs">Free questions</p>
-            <p className="text-white font-bold">{FREE_LIMIT - questionsUsed} / {FREE_LIMIT} left</p>
+            <p className="text-brand-200 text-xs">Questions</p>
+            <p className="text-white font-bold">
+              {isPremium ? "∞ Unlimited" : `${Math.max(0, FREE_LIMIT - questionsUsed)} / ${FREE_LIMIT} left`}
+            </p>
           </div>
         </div>
       </section>
@@ -233,7 +238,6 @@ export default function AITutorPage() {
                 ? "bg-brand-700 text-white rounded-br-sm"
                 : "bg-white text-gray-800 shadow border border-gray-100 rounded-bl-sm")
             }>
-              {/* Show uploaded image in message */}
               {msg.image && (
                 <img src={msg.image} alt="Uploaded question"
                   className="rounded-lg max-w-full mb-2 border border-white/20" />
@@ -268,7 +272,7 @@ export default function AITutorPage() {
       {/* Input Area */}
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto">
-          {questionsUsed >= FREE_LIMIT && (
+          {limitReached && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 mb-3 flex justify-between items-center">
               <p className="text-yellow-700 text-sm font-medium">Daily limit reached — upgrade for unlimited AI tutoring</p>
               <a href="/upgrade" className="bg-brand-700 text-white px-4 py-1 rounded-lg text-sm font-semibold">Upgrade $3</a>
@@ -278,7 +282,8 @@ export default function AITutorPage() {
           {/* Image preview */}
           {selectedImage && (
             <div className="mb-3 relative inline-block">
-              <img src={selectedImage.preview} alt="Selected" className="h-20 rounded-lg border border-gray-200 object-cover" />
+              <img src={selectedImage.preview} alt="Selected"
+                className="h-20 rounded-lg border border-gray-200 object-cover" />
               <button onClick={removeImage}
                 className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">
                 ✕
@@ -290,7 +295,7 @@ export default function AITutorPage() {
             {/* Image upload button */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={loading || questionsUsed >= FREE_LIMIT}
+              disabled={loading || limitReached}
               className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-600 px-3 py-3 rounded-xl transition disabled:opacity-50 flex-shrink-0"
               title="Upload a photo of a question"
             >
@@ -300,6 +305,7 @@ export default function AITutorPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleImageSelect}
               className="hidden"
             />
@@ -310,12 +316,12 @@ export default function AITutorPage() {
               onKeyDown={handleKeyPress}
               placeholder={selectedImage ? "Add a message or just send the image..." : "Ask me anything about ZIMSEC O-Level Maths... (Press Enter to send)"}
               rows={2}
-              disabled={loading || questionsUsed >= FREE_LIMIT}
+              disabled={loading || limitReached}
               className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-gray-700 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
             />
             <button
               onClick={() => handleSend()}
-              disabled={loading || (!input.trim() && !selectedImage) || questionsUsed >= FREE_LIMIT}
+              disabled={loading || (!input.trim() && !selectedImage) || limitReached}
               className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-3 rounded-xl font-semibold transition flex-shrink-0"
             >
               {loading ? "..." : "Send"}
