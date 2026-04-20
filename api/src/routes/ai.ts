@@ -11,6 +11,16 @@ const openai = new OpenAI({
   baseURL: 'https://api.deepseek.com',
 });
 
+// OpenRouter client — same as marking system
+const openrouter = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://zimmaths.com',
+    'X-Title': 'ZimMaths Academy',
+  },
+});
+
 const SYSTEM_PROMPT = `You are Takudzwa, a patient and encouraging maths tutor for Zimbabwean O-Level students.
 You ONLY answer questions about ZIMSEC O-Level Mathematics (syllabus 4004/4008).
 
@@ -20,18 +30,25 @@ ALWAYS: Show step-by-step working. Label each step clearly.
 ALWAYS: Explain WHY each step is taken, not just what to do.
 ALWAYS: Use simple English that a Form 3 or Form 4 student can understand.
 ALWAYS: Encourage the student — never make them feel stupid or discouraged.
-ALWAYS: Use ^ for powers (x^2), / for division in plain text when typing maths.
+ALWAYS: Use LaTeX notation for maths: $x^2$ for inline, $$\frac{a}{b}$$ for display.
 
 If asked about anything outside ZIMSEC O-Level Maths, respond with:
 "I can only help with ZIMSEC O-Level Maths. Ask me anything about these topics: General Arithmetic, Number Bases, Algebra, Sets, Geometry, Trigonometry, Mensuration, Graphs & Variation, Statistics, Probability, Matrices & Transformations, Vectors, Coordinate Geometry, Financial Mathematics, or Measurement & Estimation."`;
 
-// Define response type for OpenRouter API
-interface OpenRouterResponse {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
-  }>;
+// Vision models — same as marking system, try in order
+const VISION_MODELS = [
+  'google/gemini-2.0-flash-001',
+  'meta-llama/llama-3.2-11b-vision-instruct',
+];
+
+// Timeout helper
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+    promise
+      .then((val) => { clearTimeout(timer); resolve(val); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
 }
 
 // Track daily AI usage per user in memory
@@ -87,7 +104,6 @@ router.post('/chat', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
 
-    // Check daily limit
     const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
@@ -143,7 +159,7 @@ router.get('/suggestions', (req: Request, res: Response) => {
   res.json({ success: true, data: suggestions });
 });
 
-// POST chat with image
+// POST chat with image — tries Gemini 2.0 Flash then Llama vision fallback
 router.post('/chat-image', async (req: Request, res: Response) => {
   try {
     const { message, imageBase64, mimeType, history } = req.body;
@@ -152,7 +168,6 @@ router.post('/chat-image', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Image is required' });
     }
 
-    // Check daily limit
     const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
@@ -168,16 +183,16 @@ router.post('/chat-image', async (req: Request, res: Response) => {
       });
     }
 
+    const imageUrl = `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`;
+
     const userContent: any[] = [
       {
         type: 'image_url',
-        image_url: {
-          url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
-        },
+        image_url: { url: imageUrl },
       },
       {
         type: 'text',
-        text: message || 'Please read this maths question and solve it step by step.',
+        text: message || 'Please read this maths question from the image and solve it step by step, showing all working.',
       },
     ];
 
@@ -190,24 +205,41 @@ router.post('/chat-image', async (req: Request, res: Response) => {
       { role: 'user', content: userContent },
     ];
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemma-4-26b-a4b-it:free',
-        messages,
-        max_tokens: 1000,
-      }),
+    // Try vision models in order — same pattern as marking system
+    for (const model of VISION_MODELS) {
+      try {
+        console.log(`AI tutor image: trying ${model}...`);
+
+        const completion = await withTimeout(
+          openrouter.chat.completions.create({
+            model,
+            messages,
+            max_tokens: 1000,
+          }),
+          20000
+        );
+
+        const reply = completion.choices[0]?.message?.content || '';
+
+        if (!reply || reply.length < 5) {
+          console.log(`${model}: empty response, trying next...`);
+          continue;
+        }
+
+        console.log(`AI tutor image succeeded with ${model}`);
+        return res.json({ success: true, message: reply, role: 'assistant' });
+      } catch (modelErr: any) {
+        console.error(`${model} failed:`, modelErr?.message || modelErr);
+        // Try next model
+      }
+    }
+
+    // All models failed
+    res.status(500).json({
+      success: false,
+      message: 'Sorry, I could not read the image. Please try typing your question instead.',
     });
 
-    const data = await response.json() as OpenRouterResponse;
-    console.log('OpenRouter response:', JSON.stringify(data));
-    const reply = data.choices?.[0]?.message?.content || 'Sorry, I could not read the image.';
-
-    res.json({ success: true, message: reply, role: 'assistant' });
   } catch (error: any) {
     console.error('Vision AI error:', error);
     res.status(500).json({ success: false, message: 'Could not process image. Please try again.' });
