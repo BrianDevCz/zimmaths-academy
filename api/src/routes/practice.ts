@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/auth";
 import { awardPoints } from "../points";
 import { markAnswer } from "../marking";
 import { markAnswerWithAI, extractTextFromImage } from "../aiMarking";
+import { checkBadgesAfterPracticeTest } from '../badges';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -160,11 +161,9 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
             const val = (partAnswers[part] || "").trim();
             if (val) cleaned[part] = val;
           }
-          // If no parts had actual answers, treat as no answer
           partAnswers = Object.keys(cleaned).length > 0 ? cleaned : null;
         }
 
-        // Build the combined user answer string
         const rawSingleAnswer = (answer.userAnswer || "").trim();
         const userAnswer = partAnswers
           ? Object.entries(partAnswers)
@@ -172,7 +171,6 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
               .join(" ")
           : rawSingleAnswer;
 
-        // Determine if any answer was actually given
         const hasAnyAnswer = partAnswers !== null
           ? Object.keys(partAnswers).length > 0
           : rawSingleAnswer.length > 0;
@@ -181,7 +179,6 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
 
         let finalResult;
 
-        // No answer given — always wrong, never call AI
         if (!hasAnyAnswer) {
           finalResult = {
             isCorrect: false,
@@ -266,6 +263,7 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
           feedback: finalResult.feedback,
           marks: question.marks,
           topic: question.topic?.name,
+          topicSlug: question.topic?.slug,
           difficulty: question.difficulty,
           markingMethod: finalResult.method,
           partResults: (finalResult as any).partResults || [],
@@ -289,8 +287,10 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         ? Math.round((totalMarksAwarded / totalMarksAvailable) * 100)
         : 0;
 
-    // Award points
+    // Award points and check badges
     let pointsAwarded = 0;
+    let badgesAwarded: string[] = [];
+
     if (req.userId) {
       if (totalQuestions >= 20) {
         pointsAwarded += await awardPoints(req.userId, "practice_20q");
@@ -306,6 +306,9 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
         pointsAwarded += await awardPoints(req.userId, "practice_bonus_80");
       }
 
+      // Get topic slug from first question
+      const topicSlug = (validResults[0] as any)?.topicSlug || null;
+
       await prisma.practiceTest.create({
         data: {
           userId: req.userId,
@@ -316,6 +319,14 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
           questionsData: validResults as any,
         },
       });
+
+      // Check badges after saving test
+      badgesAwarded = await checkBadgesAfterPracticeTest(
+        req.userId,
+        scorePercentage,
+        totalQuestions,
+        topicSlug
+      );
     }
 
     console.log(`Submit complete — score: ${scorePercentage}%`);
@@ -331,6 +342,7 @@ router.post("/submit", async (req: AuthRequest, res: Response) => {
           totalMarksAwarded,
           scorePercentage,
           pointsAwarded,
+          badgesAwarded,
         },
       },
     });

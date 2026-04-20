@@ -90,6 +90,9 @@ export default function Navbar() {
                   <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
                     📌 My Bookmarks
                   </a>
+                  <a href="/badges" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+                    🏅 My Badges
+                  </a>
                   {!isPremium && (
                     <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
                       ⭐ Upgrade to Premium
@@ -168,6 +171,9 @@ export default function Navbar() {
           </a>
           <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
             📌 My Bookmarks
+          </a>
+          <a href="/badges" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+            🏅 My Badges
           </a>
           {!isPremium && (
             <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
