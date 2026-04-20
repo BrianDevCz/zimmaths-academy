@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "../../../../context/AuthContext";
 import MathContent from "../../../../components/MathContent";
+import BookmarkButton from "@/app/components/BookmarkButton";
+import { API_URL } from "@/app/lib/api";
 
 export default function QuestionPage() {
   const { id, questionId } = useParams<{ id: string; questionId: string }>();
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, isPremium } = useAuth();
 
   const [question, setQuestion] = useState<any>(null);
-  const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,26 +21,9 @@ export default function QuestionPage() {
         const headers: any = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const [qRes, subRes] = await Promise.all([
-          fetch(
-            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/questions/${questionId}`,
-            { headers }
-          ),
-          token
-            ? fetch(
-                `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`,
-                { headers }
-              )
-            : Promise.resolve(null),
-        ]);
-
+        const qRes = await fetch(`${API_URL}/api/questions/${questionId}`, { headers });
         const qData = await qRes.json();
         if (qData.success) setQuestion(qData.data);
-
-        if (subRes) {
-          const subData = await subRes.json();
-          if (subData.success && subData.isPremium) setIsPremium(true);
-        }
       } catch (err) {
         console.error("Failed to load question:", err);
       } finally {
@@ -82,7 +66,7 @@ export default function QuestionPage() {
             href={"/papers/" + id}
             className="text-brand-300 hover:text-white text-sm mb-4 inline-block"
           >
-            Back to Paper
+            ← Back to Paper
           </a>
           <div className="flex items-center gap-4 mt-2">
             <span className="bg-white text-brand-800 w-12 h-12 rounded-full flex items-center justify-center font-bold">
@@ -110,6 +94,7 @@ export default function QuestionPage() {
 
       <section className="max-w-3xl mx-auto px-6 py-10 space-y-6">
 
+        {/* Question */}
         <div className="bg-white rounded-2xl shadow p-6 border border-gray-200">
           <h2 className="text-sm font-semibold text-brand-700 uppercase tracking-wide mb-3">
             Question
@@ -126,6 +111,7 @@ export default function QuestionPage() {
           )}
         </div>
 
+        {/* Solution */}
         <div className="bg-white rounded-2xl shadow p-6 border border-gray-200">
           <h2 className="text-sm font-semibold text-brand-700 uppercase tracking-wide mb-4">
             Step-by-Step Solution
@@ -212,20 +198,23 @@ export default function QuestionPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-6 border border-gray-200 text-center">
-          <p className="text-gray-600 mb-4">Challenge your friends with this question!</p>
-          <a
-            href={
-              "https://wa.me/?text=Can you solve this ZIMSEC Maths question? " +
-              encodeURIComponent(question.questionText) +
-              " - See solution at zimmaths.com"
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-green-500 hover:bg-green-400 text-white px-6 py-3 rounded-lg font-semibold transition inline-block"
-          >
-            Share on WhatsApp
-          </a>
+        {/* Actions */}
+        <div className="bg-white rounded-2xl shadow p-6 border border-gray-200">
+          <div className="flex gap-3 justify-center flex-wrap">
+            <BookmarkButton questionId={question.id} />
+            <a
+              href={
+                "https://wa.me/?text=Can you solve this ZIMSEC Maths question? " +
+                encodeURIComponent(question.questionText) +
+                " - See solution at zimmaths.com"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-500 hover:bg-green-400 text-white px-6 py-3 rounded-lg font-semibold transition inline-block"
+            >
+              📤 Share on WhatsApp
+            </a>
+          </div>
         </div>
 
       </section>

@@ -14,6 +14,7 @@ import dashboardRouter from "./routes/dashboard";
 import rateLimit from "express-rate-limit";
 import leaderboardRouter from "./routes/leaderboard";
 import subscriptionsRouter from "./routes/subscriptions";
+import bookmarksRouter from "./routes/bookmarks";
 
 dotenv.config();
 
@@ -150,6 +151,7 @@ app.use("/api/dashboard", requireAuth, dashboardRouter);
 app.use("/api/leaderboard", requireAuth, leaderboardRouter);
 app.use("/api/subscriptions/initiate-paynow", paymentLimiter);
 app.use("/api/subscriptions", requireAuth, subscriptionsRouter);
+app.use("/api/bookmarks", requireAuth, bookmarksRouter);
 
 // Health check
 app.get("/api/health", (req, res) => {

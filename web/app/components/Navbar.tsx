@@ -76,19 +76,22 @@ export default function Navbar() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-800">{user.name}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
-                  <a href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+                  <a href="/dashboard" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
                     📊 My Dashboard
                   </a>
-                  <a href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+                  <a href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
                     👤 My Profile
                   </a>
+                  <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+                    📌 My Bookmarks
+                  </a>
                   {!isPremium && (
-                    <a href="/upgrade" className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
+                    <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
                       ⭐ Upgrade to Premium
                     </a>
                   )}
@@ -116,7 +119,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile right side — user avatar or auth + hamburger */}
+        {/* Mobile right side */}
         <div className="flex md:hidden items-center gap-2">
           {user ? (
             <button
@@ -162,6 +165,9 @@ export default function Navbar() {
           </a>
           <a href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
             👤 My Profile
+          </a>
+          <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
+            📌 My Bookmarks
           </a>
           {!isPremium && (
             <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
