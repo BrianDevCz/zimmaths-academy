@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import OpenAI from 'openai';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
 
 const router = Router();
+const prisma = new PrismaClient();
 
 const openai = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: 'https://api.deepseek.com', // DeepSeek's API endpoint
+  baseURL: 'https://api.deepseek.com',
 });
 
 const SYSTEM_PROMPT = `You are Takudzwa, a patient and encouraging maths tutor for Zimbabwean O-Level students.
@@ -20,7 +23,7 @@ ALWAYS: Encourage the student — never make them feel stupid or discouraged.
 ALWAYS: Use ^ for powers (x^2), / for division in plain text when typing maths.
 
 If asked about anything outside ZIMSEC O-Level Maths, respond with:
-"I can only help with ZIMSEC O-Level Maths. Ask me anything about these topics: General Arithmetic, Number Bases, Algebra, Sets, Geometry, Trigonometry, Mensuration, Graphs & Variation, Statistics, Probability, Matrices & Transformations, Vectors, Coordinate Geometry, Financial Mathematics, or Measurement & Estimation."`
+"I can only help with ZIMSEC O-Level Maths. Ask me anything about these topics: General Arithmetic, Number Bases, Algebra, Sets, Geometry, Trigonometry, Mensuration, Graphs & Variation, Statistics, Probability, Matrices & Transformations, Vectors, Coordinate Geometry, Financial Mathematics, or Measurement & Estimation."`;
 
 // Define response type for OpenRouter API
 interface OpenRouterResponse {
@@ -31,19 +34,75 @@ interface OpenRouterResponse {
   }>;
 }
 
+// Track daily AI usage per user in memory
+const dailyUsage = new Map<string, { count: number; date: string }>();
+
+async function checkDailyLimit(userId: string): Promise<{ allowed: boolean; isPremium: boolean }> {
+  const today = new Date().toDateString();
+
+  // Check subscription
+  let isPremium = false;
+  try {
+    const sub = await prisma.subscription.findFirst({
+      where: { userId, status: 'active', endDate: { gt: new Date() } },
+    });
+    isPremium = !!sub;
+  } catch {}
+
+  const limit = isPremium ? 100 : 5;
+
+  // Get or reset usage
+  const usage = dailyUsage.get(userId);
+  if (!usage || usage.date !== today) {
+    dailyUsage.set(userId, { count: 0, date: today });
+  }
+
+  const current = dailyUsage.get(userId)!;
+  if (current.count >= limit) {
+    return { allowed: false, isPremium };
+  }
+
+  current.count++;
+  return { allowed: true, isPremium };
+}
+
+async function getUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
+
 // POST chat message
 router.post('/chat', async (req: Request, res: Response) => {
   try {
     const { message, history } = req.body;
 
     if (!message) {
-      return res.status(400).json({
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+
+    // Check daily limit
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
+    }
+
+    const { allowed, isPremium } = await checkDailyLimit(userId);
+    if (!allowed) {
+      return res.status(429).json({
         success: false,
-        message: 'Message is required',
+        message: isPremium
+          ? 'You have reached your daily limit of 100 AI questions. Come back tomorrow!'
+          : 'You have used your 5 free questions for today. Upgrade to Premium for more!',
       });
     }
 
-    // Build conversation history for context
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...(history || []).map((msg: any) => ({
@@ -53,7 +112,6 @@ router.post('/chat', async (req: Request, res: Response) => {
       { role: 'user', content: message },
     ];
 
-    // Call DeepSeek API
     const completion = await openai.chat.completions.create({
       model: 'deepseek-chat',
       messages: messages,
@@ -63,17 +121,10 @@ router.post('/chat', async (req: Request, res: Response) => {
 
     const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
 
-    res.json({
-      success: true,
-      message: response,
-      role: 'assistant',
-    });
+    res.json({ success: true, message: response, role: 'assistant' });
   } catch (error: any) {
     console.error('DeepSeek AI error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Takudzwa is temporarily unavailable. Please try again.',
-    });
+    res.status(500).json({ success: false, message: 'Takudzwa is temporarily unavailable. Please try again.' });
   }
 });
 
@@ -99,6 +150,22 @@ router.post('/chat-image', async (req: Request, res: Response) => {
 
     if (!imageBase64) {
       return res.status(400).json({ success: false, message: 'Image is required' });
+    }
+
+    // Check daily limit
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
+    }
+
+    const { allowed, isPremium } = await checkDailyLimit(userId);
+    if (!allowed) {
+      return res.status(429).json({
+        success: false,
+        message: isPremium
+          ? 'You have reached your daily limit of 100 AI questions. Come back tomorrow!'
+          : 'You have used your 5 free questions for today. Upgrade to Premium for more!',
+      });
     }
 
     const userContent: any[] = [
