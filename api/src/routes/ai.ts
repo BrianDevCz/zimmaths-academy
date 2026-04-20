@@ -197,7 +197,7 @@ router.post('/chat-image', async (req: Request, res: Response) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemma-4-27b-it:free',
+        model: 'google/gemma-4-26b-a4b-it:free',
         messages,
         max_tokens: 1000,
       }),
