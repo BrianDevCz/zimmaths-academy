@@ -44,7 +44,7 @@ async function checkDailyLimit(userId: string): Promise<{ allowed: boolean; isPr
   let isPremium = false;
   try {
     const sub = await prisma.subscription.findFirst({
-      where: { userId, status: 'active', endDate: { gt: new Date() } },
+      where: { userId, status: 'active', expiresAt: { gt: new Date() } },
     });
     isPremium = !!sub;
   } catch {}
@@ -204,6 +204,7 @@ router.post('/chat-image', async (req: Request, res: Response) => {
     });
 
     const data = await response.json() as OpenRouterResponse;
+    console.log('OpenRouter response:', JSON.stringify(data));
     const reply = data.choices?.[0]?.message?.content || 'Sorry, I could not read the image.';
 
     res.json({ success: true, message: reply, role: 'assistant' });
