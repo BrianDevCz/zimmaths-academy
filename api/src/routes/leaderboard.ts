@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthRequest } from "../middleware/auth";
+import { checkLeaderboardBadges } from "../badges";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -29,7 +30,6 @@ async function getTopUsers(period: "weekly" | "monthly" | "alltime", limit = 100
     take: limit,
   });
 
-  // Get user details for each entry
   const userIds = pointsData.map((p) => p.userId);
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } },
@@ -52,13 +52,20 @@ async function getTopUsers(period: "weekly" | "monthly" | "alltime", limit = 100
 router.get("/weekly", async (req: AuthRequest, res: Response) => {
   try {
     const board = await getTopUsers("weekly");
-    
+
     // Find current user's rank if logged in
     let myRank = null;
+    let badgesAwarded: string[] = [];
+
     if (req.userId) {
       const myIndex = board.findIndex((u) => u.userId === req.userId);
+
       if (myIndex !== -1) {
-        myRank = { rank: myIndex + 1, points: board[myIndex].points };
+        const rank = myIndex + 1;
+        myRank = { rank, points: board[myIndex].points };
+
+        // Check leaderboard badges
+        badgesAwarded = await checkLeaderboardBadges(req.userId, rank);
       } else {
         // User not in top 100 — calculate their actual rank
         const now = new Date();
@@ -90,13 +97,11 @@ router.get("/weekly", async (req: AuthRequest, res: Response) => {
       period: "weekly",
       data: board,
       myRank,
+      badgesAwarded,
     });
   } catch (error) {
     console.error("Leaderboard error:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Failed to load leaderboard.",
-    });
+    return res.status(500).json({ success: false, error: "Failed to load leaderboard." });
   }
 });
 
@@ -104,16 +109,18 @@ router.get("/weekly", async (req: AuthRequest, res: Response) => {
 router.get("/monthly", async (req: AuthRequest, res: Response) => {
   try {
     const board = await getTopUsers("monthly");
-    return res.status(200).json({
-      success: true,
-      period: "monthly",
-      data: board,
-    });
+
+    let myRank = null;
+    if (req.userId) {
+      const myIndex = board.findIndex((u) => u.userId === req.userId);
+      if (myIndex !== -1) {
+        myRank = { rank: myIndex + 1, points: board[myIndex].points };
+      }
+    }
+
+    return res.status(200).json({ success: true, period: "monthly", data: board, myRank });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to load leaderboard.",
-    });
+    return res.status(500).json({ success: false, error: "Failed to load leaderboard." });
   }
 });
 
@@ -121,16 +128,18 @@ router.get("/monthly", async (req: AuthRequest, res: Response) => {
 router.get("/alltime", async (req: AuthRequest, res: Response) => {
   try {
     const board = await getTopUsers("alltime");
-    return res.status(200).json({
-      success: true,
-      period: "alltime",
-      data: board,
-    });
+
+    let myRank = null;
+    if (req.userId) {
+      const myIndex = board.findIndex((u) => u.userId === req.userId);
+      if (myIndex !== -1) {
+        myRank = { rank: myIndex + 1, points: board[myIndex].points };
+      }
+    }
+
+    return res.status(200).json({ success: true, period: "alltime", data: board, myRank });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to load leaderboard.",
-    });
+    return res.status(500).json({ success: false, error: "Failed to load leaderboard." });
   }
 });
 

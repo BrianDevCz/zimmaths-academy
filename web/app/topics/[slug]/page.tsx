@@ -1,15 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import MathContent from "../../components/MathContent";
 import LessonMathContent from "../../components/LessonMathContent";
+import { API_URL } from "@/app/lib/api";
 
 export default function TopicPage() {
-  const { token, loading: authLoading } = useAuth();
+  const { token, loading: authLoading, isPremium } = useAuth();
   const params = useParams();
-  const router = useRouter();
   const slug = params?.slug as string;
 
   const [topic, setTopic] = useState<any>(null);
@@ -19,7 +19,9 @@ export default function TopicPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"lessons" | "practice">("lessons");
-  const [isPremium, setIsPremium] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
+  const [justCompleted, setJustCompleted] = useState<{ points: number; badges: string[] } | null>(null);
 
   useEffect(() => {
     if (slug && !authLoading) fetchTopicData();
@@ -31,13 +33,10 @@ export default function TopicPage() {
       const headers: any = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const [topicRes, lessonsRes, questionsRes, subRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/topics/${slug}`),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/topics/${slug}/lessons`),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/questions?topic=${slug}&count=5`, { headers }),
-        token
-          ? fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/subscriptions/status`, { headers })
-          : Promise.resolve(null),
+      const [topicRes, lessonsRes, questionsRes] = await Promise.all([
+        fetch(`${API_URL}/api/topics/${slug}`),
+        fetch(`${API_URL}/api/topics/${slug}/lessons`, { headers }),
+        fetch(`${API_URL}/api/questions?topic=${slug}&count=5`, { headers }),
       ]);
 
       const topicData = await topicRes.json();
@@ -48,19 +47,51 @@ export default function TopicPage() {
       if (lessonsData.success) {
         setLessons(lessonsData.data);
         if (lessonsData.data.length > 0) setActiveLesson(lessonsData.data[0]);
+        // Track completed lessons from API response
+        const completed = new Set<string>(
+          lessonsData.data.filter((l: any) => l.completed).map((l: any) => l.id)
+        );
+        setCompletedLessons(completed);
       }
 
       const questionsData = await questionsRes.json();
       if (questionsData.success) setQuestions(questionsData.data);
-
-      if (subRes) {
-        const subData = await subRes.json();
-        if (subData.success && subData.isPremium) setIsPremium(true);
-      }
     } catch (err) {
       setError("Failed to load topic.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMarkComplete = async () => {
+    if (!token || !activeLesson || completing) return;
+    setCompleting(true);
+    setJustCompleted(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/topics/lessons/${activeLesson.id}/complete`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setCompletedLessons((prev) => new Set([...prev, activeLesson.id]));
+        setJustCompleted({
+          points: data.pointsAwarded,
+          badges: data.badgesAwarded || [],
+        });
+
+        // Update lesson in list
+        setLessons((prev) =>
+          prev.map((l) => l.id === activeLesson.id ? { ...l, completed: true } : l)
+        );
+        setActiveLesson((prev: any) => ({ ...prev, completed: true }));
+      }
+    } catch (err) {
+      console.error("Mark complete error:", err);
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -75,6 +106,8 @@ export default function TopicPage() {
     if (tier === 2) return <span className="bg-yellow-100 text-yellow-700 text-xs font-semibold px-3 py-1 rounded-full">Frequently Examined</span>;
     return <span className="bg-brand-100 text-brand-700 text-xs font-semibold px-3 py-1 rounded-full">Regularly Examined</span>;
   };
+
+  const isLessonCompleted = (lessonId: string) => completedLessons.has(lessonId);
 
   if (loading) {
     return (
@@ -156,27 +189,25 @@ export default function TopicPage() {
             {/* Lesson List */}
             <div className="md:col-span-1">
               <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
-                Lessons
+                Lessons ({completedLessons.size}/{lessons.length} done)
               </h2>
               {lessons.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center">
                   <p className="text-4xl mb-3">📝</p>
                   <p className="text-gray-500 text-sm font-semibold">Lessons coming soon</p>
-                  <p className="text-gray-400 text-xs mt-1">Content is being added for this topic</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {lessons.map((lesson: any, index: number) => {
                     const lessonLocked = !lesson.isFree && !isPremium;
+                    const completed = isLessonCompleted(lesson.id);
                     return (
                       <button
                         key={lesson.id}
                         onClick={() => {
-                          if (lessonLocked) {
-                            window.location.href = "/upgrade";
-                            return;
-                          }
+                          if (lessonLocked) { window.location.href = "/upgrade"; return; }
                           setActiveLesson(lesson);
+                          setJustCompleted(null);
                         }}
                         className={`w-full text-left p-4 rounded-xl border transition ${
                           activeLesson?.id === lesson.id
@@ -186,24 +217,18 @@ export default function TopicPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                            activeLesson?.id === lesson.id
-                              ? "bg-brand-700 text-white"
-                              : "bg-gray-100 text-gray-600"
+                            completed ? "bg-green-500 text-white" :
+                            activeLesson?.id === lesson.id ? "bg-brand-700 text-white" :
+                            "bg-gray-100 text-gray-600"
                           }`}>
-                            {lessonLocked ? "🔒" : index + 1}
+                            {lessonLocked ? "🔒" : completed ? "✓" : index + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-800 truncate">
-                              {lesson.title}
-                            </p>
+                            <p className="text-sm font-semibold text-gray-800 truncate">{lesson.title}</p>
                             <p className="text-xs text-gray-400">
                               {lesson.estimatedMinutes} min
                               {lesson.videoUrl && " · 🎥 Video"}
-                              {lesson.isFree
-                                ? " · Free"
-                                : isPremium
-                                ? " · Premium"
-                                : " · 🔒 Premium"}
+                              {lesson.isFree ? " · Free" : isPremium ? " · Premium" : " · 🔒 Premium"}
                             </p>
                           </div>
                         </div>
@@ -236,19 +261,12 @@ export default function TopicPage() {
             <div className="md:col-span-2">
               {activeLesson ? (
                 <div className="space-y-6">
-
-                  {/* Only show video and content if accessible */}
                   {!activeLesson.isFree && !isPremium ? (
                     <div className="bg-white rounded-2xl border border-gray-200 shadow p-10 text-center">
                       <div className="text-6xl mb-4">🔒</div>
                       <h3 className="text-xl font-bold text-gray-800 mb-2">Premium Lesson</h3>
-                      <p className="text-gray-500 mb-6">
-                        Upgrade to access all lessons and step-by-step solutions.
-                      </p>
-                      <a
-                        href="/upgrade"
-                        className="bg-brand-700 hover:bg-brand-600 text-white px-8 py-3 rounded-lg font-bold transition inline-block"
-                      >
+                      <p className="text-gray-500 mb-6">Upgrade to access all lessons and step-by-step solutions.</p>
+                      <a href="/upgrade" className="bg-brand-700 hover:bg-brand-600 text-white px-8 py-3 rounded-lg font-bold transition inline-block">
                         Upgrade from $3
                       </a>
                     </div>
@@ -270,11 +288,8 @@ export default function TopicPage() {
                       {/* Lesson Image */}
                       {activeLesson.imageUrl && (
                         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-4">
-                          <img
-                            src={activeLesson.imageUrl}
-                            alt={activeLesson.title}
+                          <img src={activeLesson.imageUrl} alt={activeLesson.title}
                             className="w-full h-auto rounded-lg object-contain max-h-[600px]"
-                            style={{ width: "auto", maxWidth: "100%" }}
                           />
                         </div>
                       )}
@@ -282,39 +297,62 @@ export default function TopicPage() {
                       {/* Lesson Content */}
                       <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                         <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-xl font-bold text-gray-800">
-                            {activeLesson.title}
-                          </h2>
+                          <h2 className="text-xl font-bold text-gray-800">{activeLesson.title}</h2>
                           <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
                             {activeLesson.estimatedMinutes} min read
                           </span>
                         </div>
                         <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
-                          <LessonMathContent>
-                            {activeLesson.content}
-                          </LessonMathContent>
+                          <LessonMathContent>{activeLesson.content}</LessonMathContent>
                         </div>
                       </div>
 
-                      {/* Next Lesson */}
-                      {lessons.indexOf(activeLesson) < lessons.length - 1 && (
-                        <button
-                          onClick={() => {
-                            const next = lessons[lessons.indexOf(activeLesson) + 1];
-                            if (!next.isFree && !isPremium) {
-                              window.location.href = "/upgrade";
-                              return;
-                            }
-                            setActiveLesson(next);
-                          }}
-                          className="w-full bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition"
-                        >
-                          Next Lesson
-                        </button>
+                      {/* Just Completed Banner */}
+                      {justCompleted && (
+                        <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
+                          <div className="text-3xl mb-2">🎉</div>
+                          <p className="font-bold text-green-800 mb-1">Lesson Complete!</p>
+                          <p className="text-green-600 text-sm">+{justCompleted.points} points earned</p>
+                          {justCompleted.badges.length > 0 && (
+                            <p className="text-yellow-600 text-sm mt-1 font-semibold">
+                              🏅 New badge{justCompleted.badges.length > 1 ? 's' : ''}: {justCompleted.badges.join(', ')}
+                            </p>
+                          )}
+                        </div>
                       )}
+
+                      {/* Mark as Complete + Next Lesson */}
+                      <div className="flex gap-3">
+                        {token && !isLessonCompleted(activeLesson.id) && (
+                          <button
+                            onClick={handleMarkComplete}
+                            disabled={completing}
+                            className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-green-300 text-white py-3 rounded-xl font-bold transition"
+                          >
+                            {completing ? "Saving..." : "✅ Mark as Complete (+15 pts)"}
+                          </button>
+                        )}
+                        {token && isLessonCompleted(activeLesson.id) && (
+                          <div className="flex-1 bg-green-50 border border-green-200 text-green-700 py-3 rounded-xl font-bold text-center">
+                            ✅ Completed
+                          </div>
+                        )}
+                        {lessons.indexOf(activeLesson) < lessons.length - 1 && (
+                          <button
+                            onClick={() => {
+                              const next = lessons[lessons.indexOf(activeLesson) + 1];
+                              if (!next.isFree && !isPremium) { window.location.href = "/upgrade"; return; }
+                              setActiveLesson(next);
+                              setJustCompleted(null);
+                            }}
+                            className="flex-1 bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-xl font-bold transition"
+                          >
+                            Next Lesson →
+                          </button>
+                        )}
+                      </div>
                     </>
                   )}
-
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
@@ -331,13 +369,9 @@ export default function TopicPage() {
         {activeTab === "practice" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-800">
-                Practice Questions — {topic.name}
-              </h2>
-              <Link
-                href={`/practice?topic=${slug}`}
-                className="bg-brand-700 hover:bg-brand-600 text-white px-5 py-2 rounded-lg font-semibold text-sm transition"
-              >
+              <h2 className="text-lg font-bold text-gray-800">Practice Questions — {topic.name}</h2>
+              <Link href={`/practice?topic=${slug}`}
+                className="bg-brand-700 hover:bg-brand-600 text-white px-5 py-2 rounded-lg font-semibold text-sm transition">
                 Start Full Practice Test
               </Link>
             </div>
@@ -346,34 +380,24 @@ export default function TopicPage() {
               <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
                 <p className="text-4xl mb-3">❓</p>
                 <p className="text-gray-600 font-semibold">No questions yet for this topic</p>
-                <p className="text-gray-400 text-sm mt-1">Questions are being added</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {questions.map((q: any, index: number) => (
                   <div key={q.id} className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                     <div className="flex gap-2 mb-3 flex-wrap">
-                      <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">
-                        Q{index + 1}
-                      </span>
+                      <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">Q{index + 1}</span>
                       <span className={`text-xs px-2 py-0.5 rounded capitalize font-medium ${
                         q.difficulty === "easy" ? "bg-green-100 text-green-700" :
                         q.difficulty === "hard" ? "bg-red-100 text-red-700" :
                         "bg-yellow-100 text-yellow-700"
-                      }`}>
-                        {q.difficulty}
-                      </span>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                        {q.marks} marks
-                      </span>
+                      }`}>{q.difficulty}</span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{q.marks} marks</span>
                     </div>
                     <MathContent>{q.questionText || ""}</MathContent>
                     {q.questionImageUrl && (
-                      <img
-                        src={q.questionImageUrl}
-                        alt="Question diagram"
-                        className="mt-3 max-w-full max-h-64 rounded-lg border border-gray-200 object-contain"
-                      />
+                      <img src={q.questionImageUrl} alt="Question diagram"
+                        className="mt-3 max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
                     )}
                   </div>
                 ))}

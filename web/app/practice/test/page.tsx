@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import MathContent from "../../components/MathContent";
 import MathKeyboard from "../../components/MathKeyboard";
+import { API_URL } from "@/app/lib/api";
 
 // ── Detect parts like (a), (b), (c) in question text ─────────
 function detectParts(questionText: string): string[] {
@@ -14,25 +15,13 @@ function detectParts(questionText: string): string[] {
 
 // ── Answer Input — defined OUTSIDE main component to prevent remount ──
 function AnswerInput({
-  questionId,
-  part,
-  value,
-  onChange,
-  ocrPreview,
-  ocrLoading,
-  onStartCamera,
-  onOpenUpload,
-  onClearPreview,
+  questionId, part, value, onChange, ocrPreview, ocrLoading,
+  onStartCamera, onOpenUpload, onClearPreview,
 }: {
-  questionId: string;
-  part: string | null;
-  value: string;
-  onChange: (v: string) => void;
-  ocrPreview: string | undefined;
-  ocrLoading: boolean;
-  onStartCamera: () => void;
-  onOpenUpload: () => void;
-  onClearPreview: () => void;
+  questionId: string; part: string | null; value: string;
+  onChange: (v: string) => void; ocrPreview: string | undefined;
+  ocrLoading: boolean; onStartCamera: () => void;
+  onOpenUpload: () => void; onClearPreview: () => void;
 }) {
   return (
     <div className="space-y-2">
@@ -41,39 +30,24 @@ function AnswerInput({
           <p className="text-xs text-gray-500 mb-1">📷 Captured:</p>
           <img src={ocrPreview} alt="Captured" className="max-h-24 rounded object-contain" />
           {ocrLoading && (
-            <p className="text-xs text-brand-600 mt-1 animate-pulse">
-              Reading your handwriting...
-            </p>
+            <p className="text-xs text-brand-600 mt-1 animate-pulse">Reading your handwriting...</p>
           )}
         </div>
       )}
-
-      <MathKeyboard
-        value={value}
-        onChange={onChange}
-        placeholder={part ? `Answer for part (${part})...` : "Type your answer..."}
-      />
-
+      <MathKeyboard value={value} onChange={onChange}
+        placeholder={part ? `Answer for part (${part})...` : "Type your answer..."} />
       <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={onStartCamera}
-          disabled={ocrLoading}
-          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition"
-        >
+        <button onClick={onStartCamera} disabled={ocrLoading}
+          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition">
           📷 Camera
         </button>
-        <button
-          onClick={onOpenUpload}
-          disabled={ocrLoading}
-          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition"
-        >
+        <button onClick={onOpenUpload} disabled={ocrLoading}
+          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition">
           🖼️ Upload
         </button>
         {ocrPreview && (
-          <button
-            onClick={onClearPreview}
-            className="px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs transition"
-          >
+          <button onClick={onClearPreview}
+            className="px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs transition">
             Clear
           </button>
         )}
@@ -88,19 +62,17 @@ export default function PracticeTestPage() {
   const { token } = useAuth();
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<{
-    [questionId: string]: string | { [part: string]: string };
-  }>({});
+  const [answers, setAnswers] = useState<{ [questionId: string]: string | { [part: string]: string } }>({});
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-
   const [showCamera, setShowCamera] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<{ questionId: string; part: string | null } | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [ocrLoadingKey, setOcrLoadingKey] = useState<string | null>(null);
   const [ocrPreviews, setOcrPreviews] = useState<{ [key: string]: string }>({});
+  const [shareTracked, setShareTracked] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,9 +101,7 @@ export default function PracticeTestPage() {
   const currentParts = currentQuestion ? detectParts(currentQuestion.questionText) : [];
   const isMultiPart = currentParts.length > 1;
   const progress = questions.length > 0 ? Math.round(((currentIndex + 1) / questions.length) * 100) : 0;
-
-  const formatTime = (s: number) =>
-    Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
+  const formatTime = (s: number) => Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
 
   const hasAnswer = (qId: string) => {
     const ans = answers[qId];
@@ -140,17 +110,15 @@ export default function PracticeTestPage() {
     return Object.values(ans).some((v) => v.trim().length > 0);
   };
 
-  const handleSingleAnswer = (questionId: string, value: string) => {
+  const handleSingleAnswer = (questionId: string, value: string) =>
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
-  };
 
-  const handlePartAnswer = (questionId: string, part: string, value: string) => {
+  const handlePartAnswer = (questionId: string, part: string, value: string) =>
     setAnswers((prev) => {
       const existing = prev[questionId];
       const partObj = typeof existing === "object" && existing !== null ? existing : {};
       return { ...prev, [questionId]: { ...partObj, [part]: value } };
     });
-  };
 
   const getPartAnswer = (questionId: string, part: string): string => {
     const ans = answers[questionId];
@@ -166,15 +134,11 @@ export default function PracticeTestPage() {
   // ── Camera ──────────────────────────────────────────────────
   const startCamera = async (questionId: string, part: string | null) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       setCameraStream(stream);
       setCameraTarget({ questionId, part });
       setShowCamera(true);
-      setTimeout(() => {
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      }, 100);
+      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100);
     } catch {
       alert("Could not access camera. Please allow camera permission or use upload.");
     }
@@ -209,11 +173,7 @@ export default function PracticeTestPage() {
     if (!file || !fileTargetRef.current) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      await processImage(
-        ev.target?.result as string,
-        fileTargetRef.current!.questionId,
-        fileTargetRef.current!.part
-      );
+      await processImage(ev.target?.result as string, fileTargetRef.current!.questionId, fileTargetRef.current!.part);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -224,19 +184,14 @@ export default function PracticeTestPage() {
     setOcrLoadingKey(key);
     setOcrPreviews((prev) => ({ ...prev, [key]: base64 }));
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/practice/ocr`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ imageBase64: base64 }),
-        }
-      );
+      const res = await fetch(`${API_URL}/api/practice/ocr`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
       const data = await res.json();
       if (data.success && data.text) {
-        part
-          ? handlePartAnswer(questionId, part, data.text)
-          : handleSingleAnswer(questionId, data.text);
+        part ? handlePartAnswer(questionId, part, data.text) : handleSingleAnswer(questionId, data.text);
       } else {
         alert("Could not read text from image. Please type your answer.");
       }
@@ -253,6 +208,26 @@ export default function PracticeTestPage() {
     part ? handlePartAnswer(questionId, part, "") : handleSingleAnswer(questionId, "");
   };
 
+  // ── Share Score to WhatsApp + track Social Learner badge ────
+  const handleShareScore = async (scorePercentage: number, correct: number, total: number) => {
+    const message = `🎯 I just scored ${scorePercentage}% on a ZimMaths Academy practice test! (${correct}/${total} correct)\n\nPractice ZIMSEC O-Level Maths at zimmaths.com 📚`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
+
+    // Track share for Social Learner badge
+    if (token && !shareTracked) {
+      try {
+        await fetch(`${API_URL}/api/badges/track-share`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setShareTracked(true);
+      } catch {
+        // silent fail
+      }
+    }
+  };
+
   // ── Submit ──────────────────────────────────────────────────
   const handleSubmit = async () => {
     setLoading(true);
@@ -266,23 +241,17 @@ export default function PracticeTestPage() {
         return { questionId: q.id, userAnswer: typeof ans === "string" ? ans : "", partAnswers: null };
       });
 
-      // ADD THIS LINE:
-      console.log("Submitting:", JSON.stringify(answersArray, null, 2));
-      
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/practice/submit`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            answers: answersArray,
-            difficulty: sessionStorage.getItem("practiceSettings")
-              ? JSON.parse(sessionStorage.getItem("practiceSettings")!).difficulty
-              : "mixed",
-            timeTaken: timeLeft,
-          }),
-        }
-      );
+      const res = await fetch(`${API_URL}/api/practice/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          answers: answersArray,
+          difficulty: sessionStorage.getItem("practiceSettings")
+            ? JSON.parse(sessionStorage.getItem("practiceSettings")!).difficulty
+            : "mixed",
+          timeTaken: timeLeft,
+        }),
+      });
       const data = await res.json();
       if (data.success) { setResults(data); setSubmitted(true); }
     } catch (err) {
@@ -327,12 +296,32 @@ export default function PracticeTestPage() {
                 : summary?.scorePercentage >= 50 ? "Good effort — keep practising!"
                 : "Keep studying — you can do it!"}
             </div>
+
             {summary?.pointsAwarded > 0 && (
-              <div className="bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 mt-2">
+              <div className="bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 mt-2 mb-4">
                 <p className="text-brand-700 font-bold text-lg">+{summary.pointsAwarded} points earned! 🏆</p>
                 <p className="text-brand-600 text-sm">Check your rank on the leaderboard</p>
               </div>
             )}
+
+            {/* Badges awarded */}
+            {summary?.badgesAwarded?.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-4">
+                <p className="text-yellow-700 font-bold">🏅 New Badge{summary.badgesAwarded.length > 1 ? 's' : ''} Earned!</p>
+                <p className="text-yellow-600 text-sm">{summary.badgesAwarded.join(' · ')}</p>
+              </div>
+            )}
+
+            {/* WhatsApp Share Score */}
+            <button
+              onClick={() => handleShareScore(summary?.scorePercentage, summary?.correctCount, summary?.totalQuestions)}
+              className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white px-6 py-3 rounded-xl font-bold transition mt-2"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+              Share My Score on WhatsApp
+            </button>
           </div>
 
           <h2 className="text-xl font-bold text-gray-800">Review Answers</h2>
@@ -357,9 +346,7 @@ export default function PracticeTestPage() {
                   {result.marksAwarded}/{result.totalMarks} marks
                 </span>
                 {result.markingMethod === "ai" && (
-                  <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
-                    ✨ AI marked
-                  </span>
+                  <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">✨ AI marked</span>
                 )}
               </div>
 
@@ -378,9 +365,7 @@ export default function PracticeTestPage() {
                     {result.partResults.map((part: any) => (
                       <div key={part.part} className={
                         "flex items-start gap-3 px-3 py-2 rounded-lg " +
-                        (part.isCorrect
-                          ? "bg-green-50 border border-green-200"
-                          : "bg-red-50 border border-red-200")
+                        (part.isCorrect ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200")
                       }>
                         <span className={
                           "text-xs font-bold px-2 py-0.5 rounded mt-0.5 shrink-0 " +
@@ -389,23 +374,17 @@ export default function PracticeTestPage() {
                           ({part.part})
                         </span>
                         <div className="flex-1">
-                          <span className={
-                            "text-xs font-semibold " +
-                            (part.isCorrect ? "text-green-700" : "text-red-700")
-                          }>
+                          <span className={"text-xs font-semibold " + (part.isCorrect ? "text-green-700" : "text-red-700")}>
                             {part.isCorrect ? "✓ Correct" : "✗ Wrong"} — {part.marksAwarded} mark{part.marksAwarded !== 1 ? "s" : ""}
                           </span>
                           {result.partAnswers?.[part.part] && (
                             <p className="text-xs text-gray-500 mt-0.5">
-                              Your answer:{" "}
-                              <span className={part.isCorrect ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                              Your answer: <span className={part.isCorrect ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
                                 {result.partAnswers[part.part]}
                               </span>
                             </p>
                           )}
-                          {part.feedback && (
-                            <p className="text-xs text-gray-600 mt-0.5">{part.feedback}</p>
-                          )}
+                          {part.feedback && <p className="text-xs text-gray-600 mt-0.5">{part.feedback}</p>}
                         </div>
                       </div>
                     ))}
@@ -479,15 +458,10 @@ export default function PracticeTestPage() {
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex flex-col items-center justify-center p-4">
           <p className="text-white text-sm mb-3">Point camera at your handwritten working</p>
-          <video ref={videoRef} autoPlay playsInline
-            className="w-full max-w-sm rounded-xl border-2 border-white" />
+          <video ref={videoRef} autoPlay playsInline className="w-full max-w-sm rounded-xl border-2 border-white" />
           <div className="flex gap-4 mt-4">
-            <button onClick={capturePhoto} className="bg-white text-gray-900 px-6 py-3 rounded-xl font-bold">
-              📸 Capture
-            </button>
-            <button onClick={stopCamera} className="bg-gray-700 text-white px-6 py-3 rounded-xl font-bold">
-              Cancel
-            </button>
+            <button onClick={capturePhoto} className="bg-white text-gray-900 px-6 py-3 rounded-xl font-bold">📸 Capture</button>
+            <button onClick={stopCamera} className="bg-gray-700 text-white px-6 py-3 rounded-xl font-bold">Cancel</button>
           </div>
         </div>
       )}
@@ -510,8 +484,6 @@ export default function PracticeTestPage() {
       {/* Question */}
       <section className="max-w-2xl mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 mb-6">
-
-          {/* Meta */}
           <div className="flex gap-2 mb-4 flex-wrap">
             <span className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded font-medium">
               {currentQuestion?.topic?.name}
@@ -529,12 +501,10 @@ export default function PracticeTestPage() {
             </span>
           </div>
 
-          {/* Question Text */}
           <div className="text-gray-800 text-xl leading-relaxed mb-4">
             <MathContent>{currentQuestion?.questionText || ""}</MathContent>
           </div>
 
-          {/* Question Image */}
           {currentQuestion?.questionImageUrl && (
             <div className="mb-6 flex justify-center">
               <img src={currentQuestion.questionImageUrl} alt="diagram"
@@ -542,7 +512,6 @@ export default function PracticeTestPage() {
             </div>
           )}
 
-          {/* Answer inputs */}
           <div className="space-y-5">
             {isMultiPart ? (
               <>
@@ -551,16 +520,12 @@ export default function PracticeTestPage() {
                   const key = `${currentQuestion.id}:${part}`;
                   return (
                     <div key={part} className="border border-gray-200 rounded-xl p-4">
-                      <label className="block text-sm font-bold text-brand-700 mb-2">
-                        Part ({part})
-                      </label>
+                      <label className="block text-sm font-bold text-brand-700 mb-2">Part ({part})</label>
                       <AnswerInput
-                        questionId={currentQuestion.id}
-                        part={part}
+                        questionId={currentQuestion.id} part={part}
                         value={getPartAnswer(currentQuestion.id, part)}
                         onChange={(v) => handlePartAnswer(currentQuestion.id, part, v)}
-                        ocrPreview={ocrPreviews[key]}
-                        ocrLoading={ocrLoadingKey === key}
+                        ocrPreview={ocrPreviews[key]} ocrLoading={ocrLoadingKey === key}
                         onStartCamera={() => startCamera(currentQuestion.id, part)}
                         onOpenUpload={() => openFileUpload(currentQuestion.id, part)}
                         onClearPreview={() => clearPreview(currentQuestion.id, part)}
@@ -571,12 +536,9 @@ export default function PracticeTestPage() {
               </>
             ) : (
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Your Answer
-                </label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Answer</label>
                 <AnswerInput
-                  questionId={currentQuestion.id}
-                  part={null}
+                  questionId={currentQuestion.id} part={null}
                   value={getSingleAnswer(currentQuestion.id)}
                   onChange={(v) => handleSingleAnswer(currentQuestion.id, v)}
                   ocrPreview={ocrPreviews[`${currentQuestion.id}:single`]}
@@ -594,7 +556,6 @@ export default function PracticeTestPage() {
           </p>
         </div>
 
-        {/* Navigation */}
         <div className="flex gap-3 mb-4">
           <button onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
             disabled={currentIndex === 0}
@@ -621,7 +582,6 @@ export default function PracticeTestPage() {
           </button>
         )}
 
-        {/* Question dots */}
         <div className="flex gap-2 justify-center mt-6 flex-wrap">
           {questions.map((q, i) => (
             <button key={q.id} onClick={() => setCurrentIndex(i)} className={
