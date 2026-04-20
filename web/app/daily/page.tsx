@@ -5,24 +5,39 @@ import { useAuth } from "../context/AuthContext";
 import MathContent from "../components/MathContent";
 import MathKeyboard from "../components/MathKeyboard";
 
+// Detect parts like (a), (b), (c) in question text
+function detectParts(questionText: string): string[] {
+  const matches = questionText.match(/\(([a-e])\)/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((m) => m.replace(/[()]/g, "")))];
+}
+
 export default function DailyChallengePage() {
   const { token } = useAuth();
   const [challenge, setChallenge] = useState<any>(null);
   const [yesterday, setYesterday] = useState<any>(null);
   const [answer, setAnswer] = useState("");
+  const [partAnswers, setPartAnswers] = useState<{ [part: string]: string }>({});
   const [submitted, setSubmitted] = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrTarget, setOcrTarget] = useState<string | null>(null); // 'single' or part letter
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState("");
-  const [ocrPreview, setOcrPreview] = useState<string | null>(null);
+  const [ocrPreviews, setOcrPreviews] = useState<{ [key: string]: string }>({});
   const [showCamera, setShowCamera] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileTargetRef = useRef<string | null>(null);
+
+  const questionText = challenge?.question?.questionText || "";
+  const parts = detectParts(questionText);
+  const isMultiPart = parts.length > 1;
 
   useEffect(() => {
     fetchChallenge();
@@ -53,7 +68,6 @@ export default function DailyChallengePage() {
       const data = await res.json();
       if (data.success) {
         setChallenge(data.data);
-        // Check if already submitted from API response
         if (data.data.userAttempt) {
           setSubmitted(true);
           setSubmitResult(data.data.userAttempt);
@@ -76,10 +90,11 @@ export default function DailyChallengePage() {
   };
 
   // ── Camera ──────────────────────────────────────────────────
-  const startCamera = async () => {
+  const startCamera = async (target: string) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       setCameraStream(stream);
+      setCameraTarget(target);
       setShowCamera(true);
       setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100);
     } catch {
@@ -91,33 +106,41 @@ export default function DailyChallengePage() {
     cameraStream?.getTracks().forEach((t) => t.stop());
     setCameraStream(null);
     setShowCamera(false);
+    setCameraTarget(null);
   };
 
   const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !cameraTarget) return;
     const canvas = canvasRef.current;
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
     const base64 = canvas.toDataURL("image/jpeg", 0.85);
+    const target = cameraTarget;
     stopCamera();
-    await processImage(base64);
+    await processImage(base64, target);
+  };
+
+  const openFileUpload = (target: string) => {
+    fileTargetRef.current = target;
+    fileInputRef.current?.click();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !fileTargetRef.current) return;
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      await processImage(ev.target?.result as string);
+      await processImage(ev.target?.result as string, fileTargetRef.current!);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const processImage = async (base64: string) => {
+  const processImage = async (base64: string, target: string) => {
     setOcrLoading(true);
-    setOcrPreview(base64);
+    setOcrTarget(target);
+    setOcrPreviews((prev) => ({ ...prev, [target]: base64 }));
     try {
       const res = await fetch(`${API_URL}/api/practice/ocr`, {
         method: "POST",
@@ -126,7 +149,11 @@ export default function DailyChallengePage() {
       });
       const data = await res.json();
       if (data.success && data.text) {
-        setAnswer(data.text);
+        if (target === 'single') {
+          setAnswer(data.text);
+        } else {
+          setPartAnswers((prev) => ({ ...prev, [target]: data.text }));
+        }
       } else {
         alert("Could not read handwriting. Please type your answer.");
       }
@@ -134,14 +161,32 @@ export default function DailyChallengePage() {
       alert("Image processing failed. Please type your answer.");
     } finally {
       setOcrLoading(false);
+      setOcrTarget(null);
     }
   };
 
+  const clearPreview = (target: string) => {
+    setOcrPreviews((prev) => { const n = { ...prev }; delete n[target]; return n; });
+    if (target === 'single') setAnswer("");
+    else setPartAnswers((prev) => { const n = { ...prev }; delete n[target]; return n; });
+  };
+
   const handleSubmit = async () => {
-    if (!answer.trim()) { setError("Please enter your answer"); return; }
+    const hasAnswer = isMultiPart
+      ? Object.values(partAnswers).some((v) => v.trim().length > 0)
+      : answer.trim().length > 0;
+
+    if (!hasAnswer) { setError("Please enter your answer"); return; }
     if (!challenge) return;
+
     setSubmitting(true);
     setError("");
+
+    // Build final answer string
+    const finalAnswer = isMultiPart
+      ? Object.entries(partAnswers).map(([k, v]) => `(${k}) ${v}`).join(" ")
+      : answer;
+
     try {
       const headers: any = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -149,7 +194,11 @@ export default function DailyChallengePage() {
       const res = await fetch(`${API_URL}/api/daily/attempt`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ challengeId: challenge.id, userAnswer: answer }),
+        body: JSON.stringify({
+          challengeId: challenge.id,
+          userAnswer: finalAnswer,
+          partAnswers: isMultiPart ? partAnswers : null,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -164,6 +213,42 @@ export default function DailyChallengePage() {
       setSubmitting(false);
     }
   };
+
+  // ── Answer input block (reusable) ───────────────────────────
+  const renderAnswerInput = (target: string, label: string) => (
+    <div className="space-y-2">
+      {ocrPreviews[target] && (
+        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">📷 Captured:</p>
+          <img src={ocrPreviews[target]} alt="Captured" className="max-h-24 rounded object-contain" />
+          {ocrLoading && ocrTarget === target && (
+            <p className="text-xs text-brand-600 mt-1 animate-pulse">Reading your handwriting...</p>
+          )}
+        </div>
+      )}
+      <MathKeyboard
+        value={target === 'single' ? answer : (partAnswers[target] || "")}
+        onChange={(v) => target === 'single' ? setAnswer(v) : setPartAnswers((prev) => ({ ...prev, [target]: v }))}
+        placeholder={label}
+      />
+      <div className="flex gap-2">
+        <button onClick={() => startCamera(target)} disabled={ocrLoading}
+          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition">
+          📷 Camera
+        </button>
+        <button onClick={() => openFileUpload(target)} disabled={ocrLoading}
+          className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-xs font-medium transition">
+          🖼️ Upload
+        </button>
+        {ocrPreviews[target] && (
+          <button onClick={() => clearPreview(target)}
+            className="px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs transition">
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -206,7 +291,6 @@ export default function DailyChallengePage() {
 
       <section className="max-w-2xl mx-auto px-6 py-10 space-y-6">
 
-        {/* Today's Challenge */}
         {challenge ? (
           <div className="bg-white rounded-2xl shadow p-8 border border-gray-200">
             <div className="flex justify-between items-center mb-6">
@@ -216,7 +300,6 @@ export default function DailyChallengePage() {
               </span>
             </div>
 
-            {/* Topic Badge */}
             <div className="flex gap-2 mb-4 flex-wrap">
               <span className="bg-brand-100 text-brand-700 text-xs font-semibold px-3 py-1 rounded-full">
                 {challenge.question?.topic?.name}
@@ -229,12 +312,10 @@ export default function DailyChallengePage() {
               </span>
             </div>
 
-            {/* Question */}
             <div className="text-gray-800 text-xl leading-relaxed mb-6">
-              <MathContent>{challenge.question?.questionText || ""}</MathContent>
+              <MathContent>{questionText}</MathContent>
             </div>
 
-            {/* Answer Section */}
             {submitted ? (
               <div className="space-y-4">
                 <div className={`border rounded-xl p-4 text-center ${
@@ -245,7 +326,7 @@ export default function DailyChallengePage() {
                     {submitResult?.isCorrect ? "Correct! Well done!" : "Answer submitted!"}
                   </p>
                   <p className="text-sm mt-1 text-gray-600">
-                    Your answer: <strong>{answer}</strong>
+                    Your answer: <strong>{submitResult?.userAnswer || answer}</strong>
                   </p>
                   {submitResult?.pointsAwarded > 0 && (
                     <p className="text-brand-600 font-semibold mt-1">+{submitResult.pointsAwarded} points earned!</p>
@@ -259,17 +340,12 @@ export default function DailyChallengePage() {
                     </p>
                   )}
                 </div>
-
-                <a
-                  href={
+                <a href={
                     "https://wa.me/?text=I just attempted today's ZimMaths Daily Challenge! Can you solve it? " +
-                    encodeURIComponent(challenge.question?.questionText || "") +
-                    " Try it at zimmaths.com/daily"
+                    encodeURIComponent(questionText) + " Try it at zimmaths.com/daily"
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center bg-green-500 hover:bg-green-400 text-white py-3 rounded-lg font-semibold transition"
-                >
+                  target="_blank" rel="noopener noreferrer"
+                  className="block text-center bg-green-500 hover:bg-green-400 text-white py-3 rounded-lg font-semibold transition">
                   Share on WhatsApp
                 </a>
               </div>
@@ -279,40 +355,22 @@ export default function DailyChallengePage() {
                   <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
                 )}
 
-                {/* OCR Preview */}
-                {ocrPreview && (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-xs text-gray-500 mb-1">📷 Captured:</p>
-                    <img src={ocrPreview} alt="Captured" className="max-h-24 rounded object-contain" />
-                    {ocrLoading && (
-                      <p className="text-xs text-brand-600 mt-1 animate-pulse">Reading your handwriting...</p>
-                    )}
+                {isMultiPart ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-500 font-medium">Answer each part separately:</p>
+                    {parts.map((part) => (
+                      <div key={part} className="border border-gray-200 rounded-xl p-4">
+                        <label className="block text-sm font-bold text-brand-700 mb-2">Part ({part})</label>
+                        {renderAnswerInput(part, `Answer for part (${part})...`)}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Your Answer</label>
+                    {renderAnswerInput('single', 'Type your answer or use camera/upload...')}
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Your Answer</label>
-                  <MathKeyboard value={answer} onChange={setAnswer}
-                    placeholder="Type your answer or use camera/upload..." />
-                </div>
-
-                {/* Camera & Upload buttons */}
-                <div className="flex gap-2">
-                  <button onClick={startCamera} disabled={ocrLoading}
-                    className="flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-sm font-medium transition">
-                    📷 Camera
-                  </button>
-                  <button onClick={() => fileInputRef.current?.click()} disabled={ocrLoading}
-                    className="flex items-center gap-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-sm font-medium transition">
-                    🖼️ Upload Image
-                  </button>
-                  {ocrPreview && (
-                    <button onClick={() => { setOcrPreview(null); setAnswer(""); }}
-                      className="px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm transition">
-                      Clear
-                    </button>
-                  )}
-                </div>
 
                 <p className="text-xs text-gray-400">
                   📸 You can photograph your handwritten working — our AI will read and mark it
@@ -323,22 +381,17 @@ export default function DailyChallengePage() {
                   {submitting ? "Submitting..." : "Submit Answer"}
                 </button>
 
-                <a
-                  href={
+                <a href={
                     "https://wa.me/?text=Can you solve today's ZimMaths Daily Challenge? " +
-                    encodeURIComponent(challenge.question?.questionText || "") +
-                    " Try it at zimmaths.com/daily"
+                    encodeURIComponent(questionText) + " Try it at zimmaths.com/daily"
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center border border-green-500 text-green-600 hover:bg-green-50 py-3 rounded-lg font-semibold transition"
-                >
+                  target="_blank" rel="noopener noreferrer"
+                  className="block text-center border border-green-500 text-green-600 hover:bg-green-50 py-3 rounded-lg font-semibold transition">
                   Share Challenge on WhatsApp
                 </a>
               </div>
             )}
 
-            {/* Stats */}
             <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center gap-8 text-center">
               <div>
                 <p className="text-2xl font-bold text-brand-800">{challenge.totalAttempts || 0}</p>
@@ -357,7 +410,6 @@ export default function DailyChallengePage() {
           </div>
         )}
 
-        {/* Yesterday's Challenge */}
         {yesterday && (
           <div className="bg-white rounded-2xl shadow p-8 border border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 mb-2">Yesterday's Challenge — Solution</h2>
