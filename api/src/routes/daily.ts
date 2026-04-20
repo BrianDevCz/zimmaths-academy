@@ -1,84 +1,96 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import { awardPoints } from '../points';
+import { checkBadgesAfterDailyChallenge } from '../badges';
 
 const router = Router();
 const prisma = new PrismaClient();
 
+function getUserId(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
+
 // GET today's challenge
 router.get('/today', async (req: Request, res: Response) => {
   try {
-    // Get today's date (Zimbabwe time UTC+2)
+    const userId = getUserId(req);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Find today's challenge
     let challenge = await prisma.dailyChallenge.findFirst({
       where: {
         date: {
           gte: today,
-          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
-        }
+          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+        },
       },
       include: {
         question: {
           include: {
-            topic: { select: { name: true, slug: true } }
-          }
-        }
-      }
+            topic: { select: { name: true, slug: true } },
+          },
+        },
+      },
     });
 
-    // If no challenge exists for today, create one automatically
+    // Auto-create if none exists
     if (!challenge) {
-      // Get a random eligible question
       const questions = await prisma.question.findMany({
-        where: { isDailyEligible: true }
+        where: { isDailyEligible: true },
       });
 
       if (questions.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'No daily challenge available today'
-        });
+        return res.status(404).json({ success: false, message: 'No daily challenge available today' });
       }
 
       const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
-
       challenge = await prisma.dailyChallenge.create({
-        data: {
-          questionId: randomQuestion.id,
-          date: today,
-        },
+        data: { questionId: randomQuestion.id, date: today },
         include: {
           question: {
-            include: {
-              topic: { select: { name: true, slug: true } }
-            }
-          }
-        }
+            include: { topic: { select: { name: true, slug: true } } },
+          },
+        },
       });
     }
 
-    // Don't reveal solution in today's challenge
+    // Check if user already attempted today
+    let userAttempt = null;
+    if (userId) {
+      userAttempt = await prisma.dailyChallengeAttempt.findFirst({
+        where: { userId, dailyChallengeId: challenge.id },
+      });
+    }
+
     const { question, ...challengeData } = challenge;
-    const { solutionText, solutionSteps, ...questionWithoutSolution } = question as any;
+    const { solutionText, solutionSteps, correctAnswer, ...questionWithoutSolution } = question as any;
 
     res.json({
       success: true,
       data: {
         ...challengeData,
         question: questionWithoutSolution,
-        // Only reveal solution if it's from a previous day
         solutionRevealed: false,
-      }
+        userAttempt: userAttempt ? {
+          submitted: true,
+          userAnswer: userAttempt.userAnswer,
+          isCorrect: userAttempt.isCorrect,
+          pointsAwarded: userAttempt.pointsAwarded,
+        } : null,
+      },
     });
-
   } catch (error) {
     console.error('Daily challenge error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch daily challenge'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch daily challenge' });
   }
 });
 
@@ -92,38 +104,23 @@ router.get('/yesterday', async (req: Request, res: Response) => {
       where: {
         date: {
           gte: yesterday,
-          lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
-        }
+          lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000),
+        },
       },
       include: {
         question: {
-          include: {
-            topic: { select: { name: true, slug: true } }
-          }
-        }
-      }
+          include: { topic: { select: { name: true, slug: true } } },
+        },
+      },
     });
 
     if (!challenge) {
-      return res.status(404).json({
-        success: false,
-        message: 'No challenge found for yesterday'
-      });
+      return res.status(404).json({ success: false, message: 'No challenge found for yesterday' });
     }
 
-    res.json({
-      success: true,
-      data: {
-        ...challenge,
-        solutionRevealed: true,
-      }
-    });
-
+    res.json({ success: true, data: { ...challenge, solutionRevealed: true } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch yesterday challenge'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch yesterday challenge' });
   }
 });
 
@@ -131,51 +128,86 @@ router.get('/yesterday', async (req: Request, res: Response) => {
 router.post('/attempt', async (req: Request, res: Response) => {
   try {
     const { challengeId, userAnswer } = req.body;
+    const userId = getUserId(req);
 
     if (!challengeId || !userAnswer) {
-      return res.status(400).json({
-        success: false,
-        message: 'Challenge ID and answer are required'
-      });
+      return res.status(400).json({ success: false, message: 'Challenge ID and answer are required' });
     }
 
-    // Get the challenge with question
     const challenge = await prisma.dailyChallenge.findUnique({
       where: { id: challengeId },
-      include: { question: true }
+      include: { question: true },
     });
 
     if (!challenge) {
-      return res.status(404).json({
-        success: false,
-        message: 'Challenge not found'
-      });
+      return res.status(404).json({ success: false, message: 'Challenge not found' });
     }
+
+    // Check if user already attempted
+    if (userId) {
+      const existing = await prisma.dailyChallengeAttempt.findFirst({
+        where: { userId, dailyChallengeId: challengeId },
+      });
+      if (existing) {
+        return res.status(400).json({ success: false, message: 'You have already attempted today\'s challenge.' });
+      }
+    }
+
+    // Simple answer check
+    const correct = (challenge.question as any).correctAnswer || '';
+    const isCorrect = correct.trim().toLowerCase() === userAnswer.trim().toLowerCase();
 
     // Update attempt count
     await prisma.dailyChallenge.update({
       where: { id: challengeId },
       data: {
-        totalAttempts: { increment: 1 }
-      }
+        totalAttempts: { increment: 1 },
+        correctAttempts: isCorrect ? { increment: 1 } : undefined,
+      },
     });
+
+    // Award points and check badges if logged in
+    let pointsAwarded = 0;
+    let badgesAwarded: string[] = [];
+
+    if (userId) {
+      // Save attempt
+      await prisma.dailyChallengeAttempt.create({
+        data: {
+          userId,
+          dailyChallengeId: challengeId,
+          userAnswer,
+          isCorrect,
+          pointsAwarded: isCorrect ? 20 : 5,
+        },
+      });
+
+      // Award points
+      if (isCorrect) {
+        pointsAwarded = await awardPoints(userId, 'daily_correct');
+      } else {
+        pointsAwarded = await awardPoints(userId, 'daily_attempt');
+      }
+
+      // Check badges
+      badgesAwarded = await checkBadgesAfterDailyChallenge(userId);
+    }
 
     res.json({
       success: true,
       message: 'Answer submitted! Come back tomorrow to see the solution.',
       data: {
         submitted: true,
+        isCorrect,
+        pointsAwarded,
+        badgesAwarded,
         challengeId,
         userAnswer,
-      }
+      },
     });
-
   } catch (error) {
     console.error('Attempt error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit attempt'
-    });
+    res.status(500).json({ success: false, message: 'Failed to submit attempt' });
   }
 });
 
@@ -184,7 +216,7 @@ router.get('/stats', async (req: Request, res: Response) => {
   try {
     const totalChallenges = await prisma.dailyChallenge.count();
     const totalAttempts = await prisma.dailyChallenge.aggregate({
-      _sum: { totalAttempts: true }
+      _sum: { totalAttempts: true },
     });
 
     res.json({
@@ -192,14 +224,35 @@ router.get('/stats', async (req: Request, res: Response) => {
       data: {
         totalChallenges,
         totalAttempts: totalAttempts._sum.totalAttempts || 0,
-      }
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch stats' });
+  }
+});
+
+// GET user's challenge history
+router.get('/history', async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+
+    const attempts = await prisma.dailyChallengeAttempt.findMany({
+      where: { userId },
+      include: {
+        dailyChallenge: {
+          include: {
+            question: { select: { questionText: true, topic: { select: { name: true } } } },
+          },
+        },
+      },
+      orderBy: { attemptedAt: 'desc' },
+      take: 30,
     });
 
+    res.json({ success: true, data: attempts });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch stats'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch history' });
   }
 });
 
