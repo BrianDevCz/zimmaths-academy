@@ -6,7 +6,6 @@ import { z } from "zod";
 const router = Router();
 const prisma = new PrismaClient();
 
-
 // GET /api/admin/stats
 router.get("/stats", async (req: AuthRequest, res: Response) => {
   try {
@@ -17,6 +16,8 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
       activeSubscriptions,
       totalRevenue,
       recentUsers,
+      totalPracticeTests,
+      totalPointsAwarded,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.paper.count(),
@@ -28,16 +29,13 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
       }),
       prisma.user.findMany({
         orderBy: { createdAt: "desc" },
-        take: 5,
+        take: 10,
         select: {
-          id: true,
-          name: true,
-          email: true,
-          grade: true,
-          createdAt: true,
-          role: true,
+          id: true, name: true, email: true, grade: true, createdAt: true, role: true,
         },
       }),
+      prisma.practiceTest.count(),
+      prisma.userPoint.aggregate({ _sum: { points: true } }),
     ]);
 
     return res.status(200).json({
@@ -49,6 +47,8 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
         activeSubscriptions,
         totalRevenue: totalRevenue._sum.amountUsd || 0,
         recentUsers,
+        totalPracticeTests,
+        totalPointsAwarded: totalPointsAwarded._sum.points || 0,
       },
     });
   } catch (error) {
@@ -60,19 +60,23 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
 // GET /api/admin/users
 router.get("/users", async (req: AuthRequest, res: Response) => {
   try {
+    const { search } = req.query;
+    const where: any = search
+      ? {
+          OR: [
+            { name: { contains: String(search), mode: "insensitive" } },
+            { email: { contains: String(search), mode: "insensitive" } },
+          ],
+        }
+      : {};
+
     const users = await prisma.user.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        grade: true,
-        role: true,
-        createdAt: true,
-        lastActive: true,
-        subscription: {
-          select: { status: true, plan: true, expiresAt: true },
-        },
+        id: true, name: true, email: true, grade: true, role: true,
+        createdAt: true, lastActive: true,
+        subscription: { select: { status: true, plan: true, expiresAt: true } },
       },
     });
     return res.status(200).json({ success: true, data: users });
@@ -86,7 +90,7 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
 router.get("/papers", async (req: AuthRequest, res: Response) => {
   try {
     const papers = await prisma.paper.findMany({
-      orderBy: { year: "desc" },
+      orderBy: { title: "asc" },
       include: { _count: { select: { questions: true } } },
     });
     return res.status(200).json({ success: true, data: papers });
@@ -104,6 +108,7 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
       year: z.number().int().min(2000).max(2030),
       session: z.enum(["june", "november"]),
       paperNumber: z.number().int().min(1).max(2),
+      isFree: z.boolean().default(false),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -119,6 +124,20 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
   }
 });
 
+// PUT /api/admin/papers/:id
+router.put("/papers/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    const paper = await prisma.paper.update({
+      where: { id: String(req.params.id) },
+      data: req.body,
+    });
+    return res.status(200).json({ success: true, data: paper });
+  } catch (error) {
+    console.error("Admin update paper error:", error);
+    return res.status(500).json({ success: false, error: "Failed to update paper." });
+  }
+});
+
 // DELETE /api/admin/papers/:id
 router.delete("/papers/:id", async (req: AuthRequest, res: Response) => {
   try {
@@ -131,13 +150,9 @@ router.delete("/papers/:id", async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/admin/questions
-// If paperId provided — return questions for that paper
-// If practiceOnly=true — return questions with no paper
-// If no filter — return all questions
 router.get("/questions", async (req: AuthRequest, res: Response) => {
   try {
     const { paperId, practiceOnly } = req.query;
-
     let where: any = {};
     if (paperId) {
       where.paperId = String(paperId);
@@ -162,7 +177,6 @@ router.get("/questions", async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/admin/questions
-// paperId is optional — questions without a paperId are practice-only
 router.post("/questions", async (req: AuthRequest, res: Response) => {
   try {
     const schema = z.object({
@@ -185,12 +199,7 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     }
 
-    // If paperId is empty string, set to null
-    const data = {
-      ...parsed.data,
-      paperId: parsed.data.paperId || null,
-    };
-
+    const data = { ...parsed.data, paperId: parsed.data.paperId || null };
     const question = await prisma.question.create({ data: data as any });
     return res.status(201).json({ success: true, data: question });
   } catch (error) {
@@ -203,7 +212,6 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
 router.post("/questions/import", async (req: AuthRequest, res: Response) => {
   try {
     const { questions } = req.body;
-
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ success: false, error: "No questions provided." });
     }
@@ -212,17 +220,13 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
 
     for (const q of questions) {
       try {
-        const topic = await prisma.topic.findUnique({
-          where: { slug: q.topicSlug },
-        });
-
+        const topic = await prisma.topic.findUnique({ where: { slug: q.topicSlug } });
         if (!topic) {
           results.failed++;
           results.errors.push(`Q${q.questionNumber}: Topic "${q.topicSlug}" not found`);
           continue;
         }
 
-        // Look up paper by title if provided
         let paperId = null;
         if (q.paperTitle && q.paperTitle.trim()) {
           const paper = await prisma.paper.findFirst({
@@ -296,9 +300,7 @@ router.get("/subscriptions", async (req: AuthRequest, res: Response) => {
   try {
     const subscriptions = await prisma.subscription.findMany({
       orderBy: { startedAt: "desc" },
-      include: {
-        user: { select: { name: true, email: true, grade: true } },
-      },
+      include: { user: { select: { name: true, email: true, grade: true } } },
     });
     return res.status(200).json({ success: true, data: subscriptions });
   } catch (error) {
@@ -354,18 +356,30 @@ router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Resp
   }
 });
 
+// PUT /api/admin/subscriptions/:userId/cancel
+router.put("/subscriptions/:userId/cancel", async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.subscription.update({
+      where: { userId: String(req.params.userId) },
+      data: { status: "cancelled" },
+    });
+    return res.status(200).json({ success: true, message: "Subscription cancelled." });
+  } catch (error) {
+    console.error("Admin cancel subscription error:", error);
+    return res.status(500).json({ success: false, error: "Failed to cancel subscription." });
+  }
+});
+
 // GET /api/admin/lessons
 router.get("/lessons", async (req: AuthRequest, res: Response) => {
   try {
     const { topicId } = req.query;
     const where = topicId ? { topicId: String(topicId) } : {};
-
     const lessons = await prisma.lesson.findMany({
       where,
       orderBy: { orderIndex: "asc" },
       include: { topic: { select: { name: true, slug: true } } },
     });
-
     return res.status(200).json({ success: true, data: lessons });
   } catch (error) {
     console.error("Admin lessons error:", error);
@@ -423,6 +437,139 @@ router.delete("/lessons/:id", async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Admin delete lesson error:", error);
     return res.status(500).json({ success: false, error: "Failed to delete lesson." });
+  }
+});
+
+// ── Daily Challenge Admin Routes ──────────────────────────────
+
+// GET /api/admin/daily-challenges — list all scheduled challenges
+router.get("/daily-challenges", async (req: AuthRequest, res: Response) => {
+  try {
+    const challenges = await prisma.dailyChallenge.findMany({
+      orderBy: { date: "desc" },
+      take: 60,
+      include: {
+        question: {
+          include: { topic: { select: { name: true } } },
+        },
+      },
+    });
+    return res.status(200).json({ success: true, data: challenges });
+  } catch (error) {
+    console.error("Admin daily challenges error:", error);
+    return res.status(500).json({ success: false, error: "Failed to load daily challenges." });
+  }
+});
+
+// GET /api/admin/daily-eligible-questions — questions eligible for daily challenge
+router.get("/daily-eligible-questions", async (req: AuthRequest, res: Response) => {
+  try {
+    const questions = await prisma.question.findMany({
+      where: { isDailyEligible: true },
+      orderBy: { questionNumber: "asc" },
+      include: { topic: { select: { name: true } } },
+    });
+    return res.status(200).json({ success: true, data: questions });
+  } catch (error) {
+    console.error("Admin eligible questions error:", error);
+    return res.status(500).json({ success: false, error: "Failed to load eligible questions." });
+  }
+});
+
+// POST /api/admin/daily-challenges — schedule a challenge
+router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
+  try {
+    const schema = z.object({
+      questionId: z.string().min(1, "Question is required"),
+      date: z.string().min(1, "Date is required"),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
+    }
+
+    // Parse date and set to midnight Zimbabwe time (UTC+2)
+    const dateObj = new Date(parsed.data.date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    // Check if date already has a challenge
+    const existing = await prisma.dailyChallenge.findFirst({
+      where: {
+        date: {
+          gte: dateObj,
+          lt: new Date(dateObj.getTime() + 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        error: `A challenge is already scheduled for ${parsed.data.date}. Delete it first.`,
+      });
+    }
+
+    const challenge = await prisma.dailyChallenge.create({
+      data: {
+        questionId: parsed.data.questionId,
+        date: dateObj,
+      },
+      include: {
+        question: { include: { topic: { select: { name: true } } } },
+      },
+    });
+
+    return res.status(201).json({ success: true, data: challenge });
+  } catch (error) {
+    console.error("Admin schedule challenge error:", error);
+    return res.status(500).json({ success: false, error: "Failed to schedule challenge." });
+  }
+});
+
+// DELETE /api/admin/daily-challenges/:id — delete a scheduled challenge
+router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    const id = String(req.params.id);
+
+    // Delete attempts first to avoid FK constraint
+    await prisma.dailyChallengeAttempt.deleteMany({
+      where: { dailyChallengeId: id },
+    });
+
+    await prisma.dailyChallenge.delete({ where: { id } });
+
+    return res.status(200).json({ success: true, message: "Challenge deleted." });
+  } catch (error) {
+    console.error("Admin delete challenge error:", error);
+    return res.status(500).json({ success: false, error: "Failed to delete challenge." });
+  }
+});
+
+// ── Badges Admin Routes ───────────────────────────────────────
+
+// GET /api/admin/badges — badge stats
+router.get("/badges", async (req: AuthRequest, res: Response) => {
+  try {
+    const badgeStats = await prisma.userBadge.groupBy({
+      by: ["badgeSlug"],
+      _count: { badgeSlug: true },
+      orderBy: { _count: { badgeSlug: "desc" } },
+    });
+
+    const recentBadges = await prisma.userBadge.findMany({
+      orderBy: { awardedAt: "desc" },
+      take: 20,
+      include: { user: { select: { name: true, email: true } } },
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { badgeStats, recentBadges },
+    });
+  } catch (error) {
+    console.error("Admin badges error:", error);
+    return res.status(500).json({ success: false, error: "Failed to load badge stats." });
   }
 });
 
