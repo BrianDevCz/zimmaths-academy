@@ -1,17 +1,16 @@
 import { Router, Request, Response } from 'express';
 import OpenAI from 'openai';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const openai = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: 'https://api.deepseek.com',
 });
 
-// OpenRouter client — same as marking system
+// OpenRouter client for vision
 const openrouter = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -30,18 +29,17 @@ ALWAYS: Show step-by-step working. Label each step clearly.
 ALWAYS: Explain WHY each step is taken, not just what to do.
 ALWAYS: Use simple English that a Form 3 or Form 4 student can understand.
 ALWAYS: Encourage the student — never make them feel stupid or discouraged.
-ALWAYS: Use LaTeX notation for maths: $x^2$ for inline, $$\frac{a}{b}$$ for display.
+ALWAYS: Use LaTeX notation for maths: $x^2$ for inline, $$\\frac{a}{b}$$ for display.
 
 If asked about anything outside ZIMSEC O-Level Maths, respond with:
 "I can only help with ZIMSEC O-Level Maths. Ask me anything about these topics: General Arithmetic, Number Bases, Algebra, Sets, Geometry, Trigonometry, Mensuration, Graphs & Variation, Statistics, Probability, Matrices & Transformations, Vectors, Coordinate Geometry, Financial Mathematics, or Measurement & Estimation."`;
 
-// Vision models — same as marking system, try in order
+// Vision models — try in order
 const VISION_MODELS = [
   'google/gemini-2.0-flash-001',
   'meta-llama/llama-3.2-11b-vision-instruct',
 ];
 
-// Timeout helper
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
@@ -51,11 +49,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-// Track daily AI usage per user in memory
-const dailyUsage = new Map<string, { count: number; date: string }>();
+function getUserId(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
 
-async function checkDailyLimit(userId: string): Promise<{ allowed: boolean; isPremium: boolean }> {
-  const today = new Date().toDateString();
+// ── DB-based daily usage tracking (survives restarts & multiple instances) ──
+async function checkDailyLimit(userId: string): Promise<{ allowed: boolean; isPremium: boolean; usageCount: number }> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   // Check subscription
   let isPremium = false;
@@ -68,34 +77,34 @@ async function checkDailyLimit(userId: string): Promise<{ allowed: boolean; isPr
 
   const limit = isPremium ? 100 : 5;
 
-  // Get or reset usage
-  const usage = dailyUsage.get(userId);
-  if (!usage || usage.date !== today) {
-    dailyUsage.set(userId, { count: 0, date: today });
+  // Get or create today's usage record
+  let usage = await prisma.aiChatUsage.findFirst({
+    where: {
+      userId,
+      date: { gte: today, lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
+    },
+  });
+
+  if (!usage) {
+    usage = await prisma.aiChatUsage.create({
+      data: { userId, date: today, messageCount: 0 },
+    });
   }
 
-  const current = dailyUsage.get(userId)!;
-  if (current.count >= limit) {
-    return { allowed: false, isPremium };
+  if (usage.messageCount >= limit) {
+    return { allowed: false, isPremium, usageCount: usage.messageCount };
   }
 
-  current.count++;
-  return { allowed: true, isPremium };
+  // Increment usage
+  await prisma.aiChatUsage.update({
+    where: { id: usage.id },
+    data: { messageCount: { increment: 1 } },
+  });
+
+  return { allowed: true, isPremium, usageCount: usage.messageCount + 1 };
 }
 
-async function getUserId(req: Request): Promise<string | null> {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1];
-  if (!token) return null;
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
-    return decoded.userId;
-  } catch {
-    return null;
-  }
-}
-
-// POST chat message
+// POST /api/ai/chat
 router.post('/chat', async (req: Request, res: Response) => {
   try {
     const { message, history } = req.body;
@@ -104,12 +113,12 @@ router.post('/chat', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Message is required' });
     }
 
-    const userId = await getUserId(req);
+    const userId = getUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
     }
 
-    const { allowed, isPremium } = await checkDailyLimit(userId);
+    const { allowed, isPremium, usageCount } = await checkDailyLimit(userId);
     if (!allowed) {
       return res.status(429).json({
         success: false,
@@ -137,14 +146,21 @@ router.post('/chat', async (req: Request, res: Response) => {
 
     const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
 
-    res.json({ success: true, message: response, role: 'assistant' });
+    const limit = isPremium ? 100 : 5;
+    res.json({
+      success: true,
+      message: response,
+      role: 'assistant',
+      usageCount,
+      limit,
+    });
   } catch (error: any) {
     console.error('DeepSeek AI error:', error);
     res.status(500).json({ success: false, message: 'Takudzwa is temporarily unavailable. Please try again.' });
   }
 });
 
-// GET quick suggestions
+// GET /api/ai/suggestions
 router.get('/suggestions', (req: Request, res: Response) => {
   const suggestions = [
     'Explain how to factorise quadratics',
@@ -159,7 +175,7 @@ router.get('/suggestions', (req: Request, res: Response) => {
   res.json({ success: true, data: suggestions });
 });
 
-// POST chat with image — tries Gemini 2.0 Flash then Llama vision fallback
+// POST /api/ai/chat-image — vision models with fallback
 router.post('/chat-image', async (req: Request, res: Response) => {
   try {
     const { message, imageBase64, mimeType, history } = req.body;
@@ -168,7 +184,7 @@ router.post('/chat-image', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Image is required' });
     }
 
-    const userId = await getUserId(req);
+    const userId = getUserId(req);
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Please log in to use the AI tutor.' });
     }
@@ -186,10 +202,7 @@ router.post('/chat-image', async (req: Request, res: Response) => {
     const imageUrl = `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`;
 
     const userContent: any[] = [
-      {
-        type: 'image_url',
-        image_url: { url: imageUrl },
-      },
+      { type: 'image_url', image_url: { url: imageUrl } },
       {
         type: 'text',
         text: `You are a strict ZIMSEC O-Level Mathematics examiner and tutor.
@@ -216,22 +229,16 @@ ${message ? `Student's additional message: ${message}` : 'Solve all parts of the
       { role: 'user', content: userContent },
     ];
 
-    // Try vision models in order — same pattern as marking system
+    // Try vision models in order
     for (const model of VISION_MODELS) {
       try {
         console.log(`AI tutor image: trying ${model}...`);
-
         const completion = await withTimeout(
-          openrouter.chat.completions.create({
-            model,
-            messages,
-            max_tokens: 1000,
-          }),
+          openrouter.chat.completions.create({ model, messages, max_tokens: 1000 }),
           20000
         );
 
         const reply = completion.choices[0]?.message?.content || '';
-
         if (!reply || reply.length < 5) {
           console.log(`${model}: empty response, trying next...`);
           continue;
@@ -241,16 +248,13 @@ ${message ? `Student's additional message: ${message}` : 'Solve all parts of the
         return res.json({ success: true, message: reply, role: 'assistant' });
       } catch (modelErr: any) {
         console.error(`${model} failed:`, modelErr?.message || modelErr);
-        // Try next model
       }
     }
 
-    // All models failed
     res.status(500).json({
       success: false,
       message: 'Sorry, I could not read the image. Please try typing your question instead.',
     });
-
   } catch (error: any) {
     console.error('Vision AI error:', error);
     res.status(500).json({ success: false, message: 'Could not process image. Please try again.' });

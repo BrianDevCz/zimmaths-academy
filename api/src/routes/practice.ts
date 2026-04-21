@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from '../lib/prisma';
 import { AuthRequest } from "../middleware/auth";
 import { awardPoints } from "../points";
 import { markAnswer } from "../marking";
@@ -7,7 +7,6 @@ import { markAnswerWithAI, extractTextFromImage } from "../aiMarking";
 import { checkBadgesAfterPracticeTest } from '../badges';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // POST /api/practice/generate
 router.post("/generate", async (req: AuthRequest, res: Response) => {

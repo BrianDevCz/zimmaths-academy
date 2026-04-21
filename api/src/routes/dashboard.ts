@@ -1,10 +1,9 @@
 import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from '../lib/prisma';
 import { AuthRequest } from "../middleware/auth";
 import { getUserTotalPoints, getUserWeeklyPoints } from "../points";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // GET /api/dashboard
 router.get("/", async (req: AuthRequest, res: Response) => {

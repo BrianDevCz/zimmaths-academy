@@ -19,11 +19,11 @@ model User {
   streakCount            Int                     @default(0)
   lastActive             DateTime                @default(now())
   createdAt              DateTime                @default(now())
-  emailVerified    Boolean  @default(false)
-  verifyToken      String?
-  verifyTokenExp   DateTime?
-  resetToken       String?
-  resetTokenExp    DateTime?
+  emailVerified          Boolean                 @default(false)
+  verifyToken            String?
+  verifyTokenExp         DateTime?
+  resetToken             String?
+  resetTokenExp          DateTime?
   role                   String                  @default("student")
   aiChatUsage            AiChatUsage[]
   bookmarks              Bookmark[]
@@ -33,6 +33,10 @@ model User {
   badges                 UserBadge[]
   lessonProgress         UserLessonProgress[]
   points                 UserPoint[]
+
+  @@index([email])
+  @@index([createdAt])
+  @@index([role])
 }
 
 model Subscription {
@@ -45,6 +49,9 @@ model Subscription {
   paymentReference String?
   amountUsd        Float
   user             User     @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([expiresAt])
 }
 
 model Topic {
@@ -74,6 +81,9 @@ model Paper {
   questionCount     Int?
   createdAt         DateTime   @default(now())
   questions         Question[]
+
+  @@index([isFree])
+  @@index([title])
 }
 
 model Question {
@@ -97,6 +107,12 @@ model Question {
   dailyChallenges  DailyChallenge[]
   paper            Paper?           @relation(fields: [paperId], references: [id])
   topic            Topic            @relation(fields: [topicId], references: [id])
+
+  @@index([topicId])
+  @@index([paperId])
+  @@index([isFree])
+  @@index([isDailyEligible])
+  @@index([difficulty])
 }
 
 model Lesson {
@@ -113,6 +129,9 @@ model Lesson {
   imageUrl         String?
   topic            Topic                @relation(fields: [topicId], references: [id])
   progress         UserLessonProgress[]
+
+  @@index([topicId])
+  @@index([orderIndex])
 }
 
 model PracticeTest {
@@ -127,6 +146,11 @@ model PracticeTest {
   questionsData    Json?
   topic            Topic?   @relation(fields: [topicId], references: [id])
   user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([completedAt])
+  @@index([scorePercentage])
 }
 
 model DailyChallenge {
@@ -137,6 +161,8 @@ model DailyChallenge {
   correctAttempts Int                     @default(0)
   question        Question                @relation(fields: [questionId], references: [id])
   attempts        DailyChallengeAttempt[]
+
+  @@index([date])
 }
 
 model DailyChallengeAttempt {
@@ -149,6 +175,10 @@ model DailyChallengeAttempt {
   pointsAwarded    Int            @default(0)
   dailyChallenge   DailyChallenge @relation(fields: [dailyChallengeId], references: [id])
   user             User           @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([dailyChallengeId])
+  @@index([attemptedAt])
 }
 
 model UserPoint {
@@ -159,6 +189,10 @@ model UserPoint {
   sourceId  String?
   awardedAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([awardedAt])
+  @@index([source])
 }
 
 model UserBadge {
@@ -167,6 +201,9 @@ model UserBadge {
   badgeSlug String
   awardedAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([badgeSlug])
 }
 
 model Bookmark {
@@ -177,6 +214,9 @@ model Bookmark {
   createdAt  DateTime @default(now())
   question   Question @relation(fields: [questionId], references: [id])
   user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([questionId])
 }
 
 model UserLessonProgress {
@@ -186,6 +226,9 @@ model UserLessonProgress {
   completedAt DateTime @default(now())
   lesson      Lesson   @relation(fields: [lessonId], references: [id])
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([lessonId])
 }
 
 model AiChatUsage {
@@ -194,4 +237,7 @@ model AiChatUsage {
   date         DateTime
   messageCount Int      @default(0)
   user         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([date])
 }

@@ -1,11 +1,10 @@
 import { Router, Response, Request } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from '../lib/prisma';
 import { AuthRequest } from "../middleware/auth";
 import { z } from "zod";
 const { Paynow } = require("paynow");
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Initialize Paynow
 const paynow = new Paynow(

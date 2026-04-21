@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from '../lib/prisma';
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -9,7 +9,6 @@ import { checkBadgesAfterLogin } from "../badges";
 import { awardPoints } from "../points";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // ── Streak helper ─────────────────────────────────────────────
 async function updateLoginStreak(userId: string): Promise<number> {
