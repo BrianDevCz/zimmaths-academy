@@ -546,6 +546,121 @@ router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) =
   }
 });
 
+// ── Analytics Route ───────────────────────────────────────────
+
+// GET /api/admin/analytics — 30-day trends
+router.get("/analytics", async (req: AuthRequest, res: Response) => {
+  try {
+    const days = 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    // Registrations per day
+    const registrations = await prisma.user.findMany({
+      where: { createdAt: { gte: since } },
+      select: { createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // Subscriptions per day
+    const subscriptions = await prisma.subscription.findMany({
+      where: { startedAt: { gte: since } },
+      select: { startedAt: true, amountUsd: true, plan: true },
+      orderBy: { startedAt: "asc" },
+    });
+
+    // Practice tests per day
+    const practiceTests = await prisma.practiceTest.findMany({
+      where: { completedAt: { gte: since } },
+      select: { completedAt: true, scorePercentage: true },
+      orderBy: { completedAt: "asc" },
+    });
+
+    // Topic popularity
+    const topicPopularity = await prisma.practiceTest.groupBy({
+      by: ["topicId"],
+      _count: { topicId: true },
+      orderBy: { _count: { topicId: "desc" } },
+      take: 10,
+    });
+
+    const topicIds = topicPopularity.map((t) => t.topicId).filter(Boolean) as string[];
+    const topicNames = await prisma.topic.findMany({
+      where: { id: { in: topicIds } },
+      select: { id: true, name: true, icon: true },
+    });
+    const topicMap = new Map(topicNames.map((t) => [t.id, t]));
+
+    const topicStats = topicPopularity
+      .filter((t) => t.topicId)
+      .map((t) => ({
+        topicId: t.topicId,
+        name: topicMap.get(t.topicId!)?.name || "Unknown",
+        icon: topicMap.get(t.topicId!)?.icon || "",
+        count: t._count.topicId,
+      }));
+
+    // Build daily buckets for last 30 days
+    const dateMap: { [date: string]: { registrations: number; subscriptions: number; revenue: number; tests: number } } = {};
+    for (let i = 0; i < days; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      const key = d.toISOString().split("T")[0];
+      dateMap[key] = { registrations: 0, subscriptions: 0, revenue: 0, tests: 0 };
+    }
+
+    for (const r of registrations) {
+      const key = new Date(r.createdAt).toISOString().split("T")[0];
+      if (dateMap[key]) dateMap[key].registrations++;
+    }
+
+    for (const s of subscriptions) {
+      const key = new Date(s.startedAt).toISOString().split("T")[0];
+      if (dateMap[key]) {
+        dateMap[key].subscriptions++;
+        dateMap[key].revenue += s.amountUsd || 0;
+      }
+    }
+
+    for (const t of practiceTests) {
+      const key = new Date(t.completedAt).toISOString().split("T")[0];
+      if (dateMap[key]) dateMap[key].tests++;
+    }
+
+    const daily = Object.entries(dateMap).map(([date, values]) => ({ date, ...values }));
+
+    // Summary stats
+    const totalNewUsers = registrations.length;
+    const totalNewSubs = subscriptions.length;
+    const totalNewRevenue = subscriptions.reduce((sum, s) => sum + (s.amountUsd || 0), 0);
+    const totalNewTests = practiceTests.length;
+    const avgScore = practiceTests.length > 0
+      ? Math.round(practiceTests.reduce((sum, t) => sum + t.scorePercentage, 0) / practiceTests.length)
+      : 0;
+
+    // Plan breakdown
+    const planBreakdown = await prisma.subscription.groupBy({
+      by: ["plan"],
+      where: { status: "active" },
+      _count: { plan: true },
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        daily,
+        topicStats,
+        summary: { totalNewUsers, totalNewSubs, totalNewRevenue, totalNewTests, avgScore },
+        planBreakdown,
+      },
+    });
+  } catch (error) {
+    console.error("Admin analytics error:", error);
+    return res.status(500).json({ success: false, error: "Failed to load analytics." });
+  }
+});
+
 // ── Badges Admin Routes ───────────────────────────────────────
 
 // GET /api/admin/badges — badge stats

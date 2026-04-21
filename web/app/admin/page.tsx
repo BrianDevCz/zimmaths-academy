@@ -39,6 +39,7 @@ export default function AdminPage() {
   const [eligibleQuestions, setEligibleQuestions] = useState<any[]>([]);
   const [badgeStats, setBadgeStats] = useState<any[]>([]);
   const [recentBadges, setRecentBadges] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formMessage, setFormMessage] = useState("");
@@ -94,6 +95,7 @@ export default function AdminPage() {
     if (activeTab === "subscriptions") fetchSubscriptions();
     if (activeTab === "daily") { fetchDailyChallenges(); fetchEligibleQuestions(); }
     if (activeTab === "badges") fetchBadgeStats();
+    if (activeTab === "analytics") fetchAnalytics();
   }, [activeTab, token, selectedPaperId]);
 
   const fetchStats = async () => {
@@ -190,6 +192,14 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) { setBadgeStats(data.data.badgeStats); setRecentBadges(data.data.recentBadges); }
     } catch { setError("Failed to load badge stats."); }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/analytics`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) setAnalytics(data.data);
+    } catch { setError("Failed to load analytics."); }
   };
 
   const handleScheduleChallenge = async () => {
@@ -465,6 +475,7 @@ export default function AdminPage() {
 
   const tabs = [
     { id: "stats", label: "📊 Dashboard" },
+    { id: "analytics", label: "📈 Analytics" },
     { id: "daily", label: "📅 Daily Challenges" },
     { id: "papers", label: "📄 Papers" },
     { id: "questions", label: "❓ Questions" },
@@ -564,6 +575,170 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ANALYTICS TAB */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            {!analytics ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <>
+                {/* 30-day summary cards */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  {[
+                    { label: "New Users (30d)", value: analytics.summary.totalNewUsers, icon: "👥", color: "text-blue-600" },
+                    { label: "New Subs (30d)", value: analytics.summary.totalNewSubs, icon: "⭐", color: "text-yellow-600" },
+                    { label: "Revenue (30d)", value: `$${analytics.summary.totalNewRevenue.toFixed(2)}`, icon: "💰", color: "text-green-600" },
+                    { label: "Tests Taken (30d)", value: analytics.summary.totalNewTests, icon: "✏️", color: "text-purple-600" },
+                    { label: "Avg Score (30d)", value: `${analytics.summary.avgScore}%`, icon: "🎯", color: "text-brand-600" },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-white rounded-2xl border border-gray-200 shadow p-5 text-center">
+                      <div className="text-2xl mb-1">{s.icon}</div>
+                      <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                      <p className="text-xs text-gray-500 mt-1">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Registrations chart */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-4">👥 New Registrations — Last 30 Days</h2>
+                  <div className="flex items-end gap-1 h-32">
+                    {analytics.daily.map((d: any, i: number) => {
+                      const max = Math.max(...analytics.daily.map((x: any) => x.registrations), 1);
+                      const height = Math.round((d.registrations / max) * 100);
+                      const isToday = d.date === new Date().toISOString().split("T")[0];
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                            {d.date}: {d.registrations} users
+                          </div>
+                          <div
+                            className={`w-full rounded-t transition-all ${isToday ? "bg-brand-600" : "bg-brand-200 hover:bg-brand-400"}`}
+                            style={{ height: `${Math.max(height, 2)}%` }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-2">
+                    <span>{analytics.daily[0]?.date}</span>
+                    <span>Today</span>
+                  </div>
+                </div>
+
+                {/* Revenue chart */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-4">💰 Daily Revenue — Last 30 Days</h2>
+                  <div className="flex items-end gap-1 h-32">
+                    {analytics.daily.map((d: any, i: number) => {
+                      const max = Math.max(...analytics.daily.map((x: any) => x.revenue), 1);
+                      const height = Math.round((d.revenue / max) * 100);
+                      const isToday = d.date === new Date().toISOString().split("T")[0];
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                            {d.date}: ${d.revenue.toFixed(2)}
+                          </div>
+                          <div
+                            className={`w-full rounded-t transition-all ${isToday ? "bg-green-600" : "bg-green-200 hover:bg-green-400"}`}
+                            style={{ height: `${Math.max(height, 2)}%` }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-2">
+                    <span>{analytics.daily[0]?.date}</span>
+                    <span>Today</span>
+                  </div>
+                </div>
+
+                {/* Practice tests chart */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                  <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice Tests — Last 30 Days</h2>
+                  <div className="flex items-end gap-1 h-32">
+                    {analytics.daily.map((d: any, i: number) => {
+                      const max = Math.max(...analytics.daily.map((x: any) => x.tests), 1);
+                      const height = Math.round((d.tests / max) * 100);
+                      const isToday = d.date === new Date().toISOString().split("T")[0];
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                            {d.date}: {d.tests} tests
+                          </div>
+                          <div
+                            className={`w-full rounded-t transition-all ${isToday ? "bg-purple-600" : "bg-purple-200 hover:bg-purple-400"}`}
+                            style={{ height: `${Math.max(height, 2)}%` }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-2">
+                    <span>{analytics.daily[0]?.date}</span>
+                    <span>Today</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Topic popularity */}
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">🔥 Most Practiced Topics</h2>
+                    {analytics.topicStats.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-4">No practice data yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {analytics.topicStats.map((t: any, i: number) => {
+                          const max = analytics.topicStats[0].count;
+                          const pct = Math.round((t.count / max) * 100);
+                          return (
+                            <div key={t.topicId || i}>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-gray-700 font-medium">{t.icon} {t.name}</span>
+                                <span className="text-gray-500">{t.count} tests</span>
+                              </div>
+                              <div className="w-full bg-gray-100 rounded-full h-2">
+                                <div className="bg-brand-500 h-2 rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Plan breakdown */}
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+                    <h2 className="text-lg font-bold text-gray-800 mb-4">⭐ Active Subscription Plans</h2>
+                    {analytics.planBreakdown.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-4">No active subscriptions.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {analytics.planBreakdown.map((p: any) => (
+                          <div key={p.plan} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                            <div>
+                              <p className="font-semibold text-gray-800 capitalize">{p.plan.replace("_", " ")}</p>
+                              <p className="text-xs text-gray-400">
+                                {p.plan === "two_weeks" ? "$3" : p.plan === "annual" ? "$45" : "$5"} per period
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-bold text-brand-700">{p._count.plan}</p>
+                              <p className="text-xs text-gray-400">subscribers</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
