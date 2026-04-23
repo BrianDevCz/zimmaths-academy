@@ -1,7 +1,7 @@
 import { Router, Response } from "express";
-import { AuthRequest, requireAdmin } from "../middleware/auth";
+import { AuthRequest } from "../middleware/auth";
 import { z } from "zod";
-import prisma from '../lib/prisma';
+import prisma from "../lib/prisma";
 
 const router = Router();
 
@@ -9,29 +9,18 @@ const router = Router();
 router.get("/stats", async (req: AuthRequest, res: Response) => {
   try {
     const [
-      totalUsers,
-      totalPapers,
-      totalQuestions,
-      activeSubscriptions,
-      totalRevenue,
-      recentUsers,
-      totalPracticeTests,
-      totalPointsAwarded,
+      totalUsers, totalPapers, totalQuestions, activeSubscriptions,
+      totalRevenue, recentUsers, totalPracticeTests, totalPointsAwarded,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.paper.count(),
       prisma.question.count(),
       prisma.subscription.count({ where: { status: "active" } }),
-      prisma.subscription.aggregate({
-        where: { status: "active" },
-        _sum: { amountUsd: true },
-      }),
+      prisma.subscription.aggregate({ where: { status: "active" }, _sum: { amountUsd: true } }),
       prisma.user.findMany({
         orderBy: { createdAt: "desc" },
         take: 10,
-        select: {
-          id: true, name: true, email: true, grade: true, createdAt: true, role: true,
-        },
+        select: { id: true, name: true, email: true, grade: true, createdAt: true, role: true },
       }),
       prisma.practiceTest.count(),
       prisma.userPoint.aggregate({ _sum: { points: true } }),
@@ -40,13 +29,9 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
     return res.status(200).json({
       success: true,
       data: {
-        totalUsers,
-        totalPapers,
-        totalQuestions,
-        activeSubscriptions,
+        totalUsers, totalPapers, totalQuestions, activeSubscriptions,
         totalRevenue: totalRevenue._sum.amountUsd || 0,
-        recentUsers,
-        totalPracticeTests,
+        recentUsers, totalPracticeTests,
         totalPointsAwarded: totalPointsAwarded._sum.points || 0,
       },
     });
@@ -56,10 +41,13 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/admin/users
+// GET /api/admin/users — with search and pagination
 router.get("/users", async (req: AuthRequest, res: Response) => {
   try {
-    const { search } = req.query;
+    const { search, page } = req.query;
+    const pageNum = Math.max(0, parseInt(String(page || "0")));
+    const pageSize = 50;
+
     const where: any = search
       ? {
           OR: [
@@ -69,16 +57,25 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
         }
       : {};
 
-    const users = await prisma.user.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true, name: true, email: true, grade: true, role: true,
-        createdAt: true, lastActive: true,
-        subscription: { select: { status: true, plan: true, expiresAt: true } },
-      },
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: pageSize,
+        skip: pageNum * pageSize,
+        select: {
+          id: true, name: true, email: true, grade: true, role: true,
+          createdAt: true, lastActive: true,
+          subscription: { select: { status: true, plan: true, expiresAt: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      success: true, data: users, total, page: pageNum,
+      pageSize, totalPages: Math.ceil(total / pageSize),
     });
-    return res.status(200).json({ success: true, data: users });
   } catch (error) {
     console.error("Admin users error:", error);
     return res.status(500).json({ success: false, error: "Failed to load users." });
@@ -109,12 +106,8 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
       paperNumber: z.number().int().min(1).max(2),
       isFree: z.boolean().default(false),
     });
-
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
-    }
-
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     const paper = await prisma.paper.create({ data: parsed.data });
     return res.status(201).json({ success: true, data: paper });
   } catch (error) {
@@ -126,10 +119,7 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
 // PUT /api/admin/papers/:id
 router.put("/papers/:id", async (req: AuthRequest, res: Response) => {
   try {
-    const paper = await prisma.paper.update({
-      where: { id: String(req.params.id) },
-      data: req.body,
-    });
+    const paper = await prisma.paper.update({ where: { id: String(req.params.id) }, data: req.body });
     return res.status(200).json({ success: true, data: paper });
   } catch (error) {
     console.error("Admin update paper error:", error);
@@ -153,11 +143,8 @@ router.get("/questions", async (req: AuthRequest, res: Response) => {
   try {
     const { paperId, practiceOnly } = req.query;
     let where: any = {};
-    if (paperId) {
-      where.paperId = String(paperId);
-    } else if (practiceOnly === "true") {
-      where.paperId = null;
-    }
+    if (paperId) where.paperId = String(paperId);
+    else if (practiceOnly === "true") where.paperId = null;
 
     const questions = await prisma.question.findMany({
       where,
@@ -167,7 +154,6 @@ router.get("/questions", async (req: AuthRequest, res: Response) => {
         paper: { select: { title: true, year: true } },
       },
     });
-
     return res.status(200).json({ success: true, data: questions });
   } catch (error) {
     console.error("Admin questions error:", error);
@@ -192,12 +178,8 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       isFree: z.boolean().default(false),
       isDailyEligible: z.boolean().default(false),
     });
-
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
-    }
-
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     const data = { ...parsed.data, paperId: parsed.data.paperId || null };
     const question = await prisma.question.create({ data: data as any });
     return res.status(201).json({ success: true, data: question });
@@ -228,9 +210,7 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
 
         let paperId = null;
         if (q.paperTitle && q.paperTitle.trim()) {
-          const paper = await prisma.paper.findFirst({
-            where: { title: { contains: q.paperTitle.trim() } },
-          });
+          const paper = await prisma.paper.findFirst({ where: { title: { contains: q.paperTitle.trim() } } });
           if (!paper) {
             results.failed++;
             results.errors.push(`Q${q.questionNumber}: Paper "${q.paperTitle}" not found`);
@@ -241,8 +221,7 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
 
         await prisma.question.create({
           data: {
-            topicId: topic.id,
-            paperId,
+            topicId: topic.id, paperId,
             questionNumber: parseInt(q.questionNumber),
             questionText: q.questionText,
             marks: parseInt(q.marks),
@@ -254,7 +233,6 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
             questionImageUrl: q.questionImageUrl || null,
           },
         });
-
         results.imported++;
       } catch (err) {
         results.failed++;
@@ -272,10 +250,7 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
 // PUT /api/admin/questions/:id
 router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
   try {
-    const question = await prisma.question.update({
-      where: { id: String(req.params.id) },
-      data: req.body,
-    });
+    const question = await prisma.question.update({ where: { id: String(req.params.id) }, data: req.body });
     return res.status(200).json({ success: true, data: question });
   } catch (error) {
     console.error("Admin update question error:", error);
@@ -312,13 +287,8 @@ router.get("/subscriptions", async (req: AuthRequest, res: Response) => {
 router.put("/users/:id/role", async (req: AuthRequest, res: Response) => {
   try {
     const { role } = req.body;
-    if (!["student", "admin"].includes(role)) {
-      return res.status(400).json({ success: false, error: "Invalid role." });
-    }
-    const user = await prisma.user.update({
-      where: { id: String(req.params.id) },
-      data: { role },
-    });
+    if (!["student", "admin"].includes(role)) return res.status(400).json({ success: false, error: "Invalid role." });
+    const user = await prisma.user.update({ where: { id: String(req.params.id) }, data: { role } });
     return res.status(200).json({ success: true, data: user });
   } catch (error) {
     console.error("Admin update role error:", error);
@@ -338,10 +308,7 @@ router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Resp
       where: { userId: String(req.params.userId) },
       update: { status: "active", plan, expiresAt, startedAt: new Date() },
       create: {
-        userId: String(req.params.userId),
-        status: "active",
-        plan,
-        expiresAt,
+        userId: String(req.params.userId), status: "active", plan, expiresAt,
         startedAt: new Date(),
         amountUsd: plan === "two_weeks" ? 3 : plan === "annual" ? 45 : 5,
         paymentReference: `ADMIN-${Date.now()}`,
@@ -358,10 +325,7 @@ router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Resp
 // PUT /api/admin/subscriptions/:userId/cancel
 router.put("/subscriptions/:userId/cancel", async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.subscription.update({
-      where: { userId: String(req.params.userId) },
-      data: { status: "cancelled" },
-    });
+    await prisma.subscription.update({ where: { userId: String(req.params.userId) }, data: { status: "cancelled" } });
     return res.status(200).json({ success: true, message: "Subscription cancelled." });
   } catch (error) {
     console.error("Admin cancel subscription error:", error);
@@ -375,8 +339,7 @@ router.get("/lessons", async (req: AuthRequest, res: Response) => {
     const { topicId } = req.query;
     const where = topicId ? { topicId: String(topicId) } : {};
     const lessons = await prisma.lesson.findMany({
-      where,
-      orderBy: { orderIndex: "asc" },
+      where, orderBy: { orderIndex: "asc" },
       include: { topic: { select: { name: true, slug: true } } },
     });
     return res.status(200).json({ success: true, data: lessons });
@@ -400,12 +363,8 @@ router.post("/lessons", async (req: AuthRequest, res: Response) => {
       geogebraUrl: z.string().optional(),
       imageUrl: z.string().optional(),
     });
-
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
-    }
-
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     const lesson = await prisma.lesson.create({ data: parsed.data });
     return res.status(201).json({ success: true, data: lesson });
   } catch (error) {
@@ -417,10 +376,7 @@ router.post("/lessons", async (req: AuthRequest, res: Response) => {
 // PUT /api/admin/lessons/:id
 router.put("/lessons/:id", async (req: AuthRequest, res: Response) => {
   try {
-    const lesson = await prisma.lesson.update({
-      where: { id: String(req.params.id) },
-      data: req.body,
-    });
+    const lesson = await prisma.lesson.update({ where: { id: String(req.params.id) }, data: req.body });
     return res.status(200).json({ success: true, data: lesson });
   } catch (error) {
     console.error("Admin update lesson error:", error);
@@ -441,17 +397,13 @@ router.delete("/lessons/:id", async (req: AuthRequest, res: Response) => {
 
 // ── Daily Challenge Admin Routes ──────────────────────────────
 
-// GET /api/admin/daily-challenges — list all scheduled challenges
+// GET /api/admin/daily-challenges
 router.get("/daily-challenges", async (req: AuthRequest, res: Response) => {
   try {
     const challenges = await prisma.dailyChallenge.findMany({
       orderBy: { date: "desc" },
       take: 60,
-      include: {
-        question: {
-          include: { topic: { select: { name: true } } },
-        },
-      },
+      include: { question: { include: { topic: { select: { name: true } } } } },
     });
     return res.status(200).json({ success: true, data: challenges });
   } catch (error) {
@@ -460,7 +412,7 @@ router.get("/daily-challenges", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/admin/daily-eligible-questions — questions eligible for daily challenge
+// GET /api/admin/daily-eligible-questions
 router.get("/daily-eligible-questions", async (req: AuthRequest, res: Response) => {
   try {
     const questions = await prisma.question.findMany({
@@ -475,31 +427,21 @@ router.get("/daily-eligible-questions", async (req: AuthRequest, res: Response) 
   }
 });
 
-// POST /api/admin/daily-challenges — schedule a challenge
+// POST /api/admin/daily-challenges
 router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
   try {
     const schema = z.object({
       questionId: z.string().min(1, "Question is required"),
       date: z.string().min(1, "Date is required"),
     });
-
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
-    }
+    if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
 
-    // Parse date and set to midnight Zimbabwe time (UTC+2)
     const dateObj = new Date(parsed.data.date);
     dateObj.setHours(0, 0, 0, 0);
 
-    // Check if date already has a challenge
     const existing = await prisma.dailyChallenge.findFirst({
-      where: {
-        date: {
-          gte: dateObj,
-          lt: new Date(dateObj.getTime() + 24 * 60 * 60 * 1000),
-        },
-      },
+      where: { date: { gte: dateObj, lt: new Date(dateObj.getTime() + 24 * 60 * 60 * 1000) } },
     });
 
     if (existing) {
@@ -510,13 +452,8 @@ router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
     }
 
     const challenge = await prisma.dailyChallenge.create({
-      data: {
-        questionId: parsed.data.questionId,
-        date: dateObj,
-      },
-      include: {
-        question: { include: { topic: { select: { name: true } } } },
-      },
+      data: { questionId: parsed.data.questionId, date: dateObj },
+      include: { question: { include: { topic: { select: { name: true } } } } },
     });
 
     return res.status(201).json({ success: true, data: challenge });
@@ -526,18 +463,12 @@ router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /api/admin/daily-challenges/:id — delete a scheduled challenge
+// DELETE /api/admin/daily-challenges/:id
 router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
-
-    // Delete attempts first to avoid FK constraint
-    await prisma.dailyChallengeAttempt.deleteMany({
-      where: { dailyChallengeId: id },
-    });
-
+    await prisma.dailyChallengeAttempt.deleteMany({ where: { dailyChallengeId: id } });
     await prisma.dailyChallenge.delete({ where: { id } });
-
     return res.status(200).json({ success: true, message: "Challenge deleted." });
   } catch (error) {
     console.error("Admin delete challenge error:", error);
@@ -545,9 +476,9 @@ router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) =
   }
 });
 
-// ── Analytics Route ───────────────────────────────────────────
+// ── Analytics ─────────────────────────────────────────────────
 
-// GET /api/admin/analytics — 30-day trends
+// GET /api/admin/analytics
 router.get("/analytics", async (req: AuthRequest, res: Response) => {
   try {
     const days = 30;
@@ -555,52 +486,24 @@ router.get("/analytics", async (req: AuthRequest, res: Response) => {
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
 
-    // Registrations per day
-    const registrations = await prisma.user.findMany({
-      where: { createdAt: { gte: since } },
-      select: { createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
-
-    // Subscriptions per day
-    const subscriptions = await prisma.subscription.findMany({
-      where: { startedAt: { gte: since } },
-      select: { startedAt: true, amountUsd: true, plan: true },
-      orderBy: { startedAt: "asc" },
-    });
-
-    // Practice tests per day
-    const practiceTests = await prisma.practiceTest.findMany({
-      where: { completedAt: { gte: since } },
-      select: { completedAt: true, scorePercentage: true },
-      orderBy: { completedAt: "asc" },
-    });
-
-    // Topic popularity
-    const topicPopularity = await prisma.practiceTest.groupBy({
-      by: ["topicId"],
-      _count: { topicId: true },
-      orderBy: { _count: { topicId: "desc" } },
-      take: 10,
-    });
+    const [registrations, subscriptions, practiceTests, topicPopularity, planBreakdown] = await Promise.all([
+      prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true }, orderBy: { createdAt: "asc" } }),
+      prisma.subscription.findMany({ where: { startedAt: { gte: since } }, select: { startedAt: true, amountUsd: true, plan: true }, orderBy: { startedAt: "asc" } }),
+      prisma.practiceTest.findMany({ where: { completedAt: { gte: since } }, select: { completedAt: true, scorePercentage: true }, orderBy: { completedAt: "asc" } }),
+      prisma.practiceTest.groupBy({ by: ["topicId"], _count: { topicId: true }, orderBy: { _count: { topicId: "desc" } }, take: 10 }),
+      prisma.subscription.groupBy({ by: ["plan"], where: { status: "active" }, _count: { plan: true } }),
+    ]);
 
     const topicIds = topicPopularity.map((t) => t.topicId).filter(Boolean) as string[];
-    const topicNames = await prisma.topic.findMany({
-      where: { id: { in: topicIds } },
-      select: { id: true, name: true, icon: true },
-    });
+    const topicNames = await prisma.topic.findMany({ where: { id: { in: topicIds } }, select: { id: true, name: true, icon: true } });
     const topicMap = new Map(topicNames.map((t) => [t.id, t]));
+    const topicStats = topicPopularity.filter((t) => t.topicId).map((t) => ({
+      topicId: t.topicId,
+      name: topicMap.get(t.topicId!)?.name || "Unknown",
+      icon: topicMap.get(t.topicId!)?.icon || "",
+      count: t._count.topicId,
+    }));
 
-    const topicStats = topicPopularity
-      .filter((t) => t.topicId)
-      .map((t) => ({
-        topicId: t.topicId,
-        name: topicMap.get(t.topicId!)?.name || "Unknown",
-        icon: topicMap.get(t.topicId!)?.icon || "",
-        count: t._count.topicId,
-      }));
-
-    // Build daily buckets for last 30 days
     const dateMap: { [date: string]: { registrations: number; subscriptions: number; revenue: number; tests: number } } = {};
     for (let i = 0; i < days; i++) {
       const d = new Date();
@@ -609,50 +512,20 @@ router.get("/analytics", async (req: AuthRequest, res: Response) => {
       dateMap[key] = { registrations: 0, subscriptions: 0, revenue: 0, tests: 0 };
     }
 
-    for (const r of registrations) {
-      const key = new Date(r.createdAt).toISOString().split("T")[0];
-      if (dateMap[key]) dateMap[key].registrations++;
-    }
-
-    for (const s of subscriptions) {
-      const key = new Date(s.startedAt).toISOString().split("T")[0];
-      if (dateMap[key]) {
-        dateMap[key].subscriptions++;
-        dateMap[key].revenue += s.amountUsd || 0;
-      }
-    }
-
-    for (const t of practiceTests) {
-      const key = new Date(t.completedAt).toISOString().split("T")[0];
-      if (dateMap[key]) dateMap[key].tests++;
-    }
+    for (const r of registrations) { const key = new Date(r.createdAt).toISOString().split("T")[0]; if (dateMap[key]) dateMap[key].registrations++; }
+    for (const s of subscriptions) { const key = new Date(s.startedAt).toISOString().split("T")[0]; if (dateMap[key]) { dateMap[key].subscriptions++; dateMap[key].revenue += s.amountUsd || 0; } }
+    for (const t of practiceTests) { const key = new Date(t.completedAt).toISOString().split("T")[0]; if (dateMap[key]) dateMap[key].tests++; }
 
     const daily = Object.entries(dateMap).map(([date, values]) => ({ date, ...values }));
-
-    // Summary stats
     const totalNewUsers = registrations.length;
     const totalNewSubs = subscriptions.length;
     const totalNewRevenue = subscriptions.reduce((sum, s) => sum + (s.amountUsd || 0), 0);
     const totalNewTests = practiceTests.length;
-    const avgScore = practiceTests.length > 0
-      ? Math.round(practiceTests.reduce((sum, t) => sum + t.scorePercentage, 0) / practiceTests.length)
-      : 0;
-
-    // Plan breakdown
-    const planBreakdown = await prisma.subscription.groupBy({
-      by: ["plan"],
-      where: { status: "active" },
-      _count: { plan: true },
-    });
+    const avgScore = practiceTests.length > 0 ? Math.round(practiceTests.reduce((sum, t) => sum + t.scorePercentage, 0) / practiceTests.length) : 0;
 
     return res.status(200).json({
       success: true,
-      data: {
-        daily,
-        topicStats,
-        summary: { totalNewUsers, totalNewSubs, totalNewRevenue, totalNewTests, avgScore },
-        planBreakdown,
-      },
+      data: { daily, topicStats, summary: { totalNewUsers, totalNewSubs, totalNewRevenue, totalNewTests, avgScore }, planBreakdown },
     });
   } catch (error) {
     console.error("Admin analytics error:", error);
@@ -660,27 +533,16 @@ router.get("/analytics", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// ── Badges Admin Routes ───────────────────────────────────────
+// ── Badges ────────────────────────────────────────────────────
 
-// GET /api/admin/badges — badge stats
+// GET /api/admin/badges
 router.get("/badges", async (req: AuthRequest, res: Response) => {
   try {
-    const badgeStats = await prisma.userBadge.groupBy({
-      by: ["badgeSlug"],
-      _count: { badgeSlug: true },
-      orderBy: { _count: { badgeSlug: "desc" } },
-    });
-
-    const recentBadges = await prisma.userBadge.findMany({
-      orderBy: { awardedAt: "desc" },
-      take: 20,
-      include: { user: { select: { name: true, email: true } } },
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: { badgeStats, recentBadges },
-    });
+    const [badgeStats, recentBadges] = await Promise.all([
+      prisma.userBadge.groupBy({ by: ["badgeSlug"], _count: { badgeSlug: true }, orderBy: { _count: { badgeSlug: "desc" } } }),
+      prisma.userBadge.findMany({ orderBy: { awardedAt: "desc" }, take: 20, include: { user: { select: { name: true, email: true } } } }),
+    ]);
+    return res.status(200).json({ success: true, data: { badgeStats, recentBadges } });
   } catch (error) {
     console.error("Admin badges error:", error);
     return res.status(500).json({ success: false, error: "Failed to load badge stats." });

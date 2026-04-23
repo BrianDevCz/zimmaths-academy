@@ -40,6 +40,9 @@ export default function AdminPage() {
   const [badgeStats, setBadgeStats] = useState<any[]>([]);
   const [recentBadges, setRecentBadges] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [userPage, setUserPage] = useState(0);
+  const [userTotal, setUserTotal] = useState(0);
+  const [userTotalPages, setUserTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formMessage, setFormMessage] = useState("");
@@ -110,14 +113,19 @@ export default function AdminPage() {
     finally { setLoading(false); }
   };
 
-  const fetchUsers = async (search?: string) => {
+  const fetchUsers = async (search?: string, page = 0) => {
     try {
-      const url = search
-        ? `${API_URL}/api/admin/users?search=${encodeURIComponent(search)}`
-        : `${API_URL}/api/admin/users`;
-      const res = await fetch(url, { headers: getHeaders() });
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      params.set("page", String(page));
+      const res = await fetch(`${API_URL}/api/admin/users?${params}`, { headers: getHeaders() });
       const data = await res.json();
-      if (data.success) setUsers(data.data);
+      if (data.success) {
+        setUsers(data.data);
+        setUserTotal(data.total);
+        setUserTotalPages(data.totalPages);
+        setUserPage(page);
+      }
     } catch { setError("Failed to load users."); }
   };
 
@@ -1284,7 +1292,7 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-bold text-gray-800">👥 All Users ({users.length})</h2>
               <input type="text" value={userSearch}
-                onChange={(e) => { setUserSearch(e.target.value); fetchUsers(e.target.value); }}
+                onChange={(e) => { setUserSearch(e.target.value); fetchUsers(e.target.value, 0); }}
                 placeholder="Search by name or email..."
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 w-64" />
             </div>
@@ -1333,6 +1341,25 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+            {/* Pagination */}
+            {userTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  Showing {userPage * 50 + 1}–{Math.min((userPage + 1) * 50, userTotal)} of {userTotal} users
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => fetchUsers(userSearch, userPage - 1)} disabled={userPage === 0}
+                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
+                    ← Previous
+                  </button>
+                  <span className="px-3 py-1 text-sm text-gray-600">Page {userPage + 1} of {userTotalPages}</span>
+                  <button onClick={() => fetchUsers(userSearch, userPage + 1)} disabled={userPage >= userTotalPages - 1}
+                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
