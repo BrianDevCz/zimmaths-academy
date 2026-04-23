@@ -488,7 +488,7 @@ router.get("/analytics", async (req: AuthRequest, res: Response) => {
 
     const [registrations, subscriptions, practiceTests, topicPopularity, planBreakdown] = await Promise.all([
       prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true }, orderBy: { createdAt: "asc" } }),
-      prisma.subscription.findMany({ where: { startedAt: { gte: since } }, select: { startedAt: true, amountUsd: true, plan: true }, orderBy: { startedAt: "asc" } }),
+      prisma.subscription.findMany({ where: { startedAt: { gte: since }, status: "active" }, select: { startedAt: true, amountUsd: true, plan: true }, orderBy: { startedAt: "asc" } }),
       prisma.practiceTest.findMany({ where: { completedAt: { gte: since } }, select: { completedAt: true, scorePercentage: true }, orderBy: { completedAt: "asc" } }),
       prisma.practiceTest.groupBy({ by: ["topicId"], _count: { topicId: true }, orderBy: { _count: { topicId: "desc" } }, take: 10 }),
       prisma.subscription.groupBy({ by: ["plan"], where: { status: "active" }, _count: { plan: true } }),
