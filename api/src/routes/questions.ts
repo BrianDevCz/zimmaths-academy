@@ -8,24 +8,17 @@ const router = Router();
 router.get("/", async (req: any, res: Response) => {
   try {
     const { topic, difficulty, count = "5", exclude } = req.query;
-
-    const excludeIds = exclude
-      ? String(exclude).split(",").filter(Boolean)
-      : [];
-
+    const excludeIds = exclude ? String(exclude).split(",").filter(Boolean) : [];
     const where: any = {};
     if (topic) where.topic = { slug: String(topic) };
-    if (difficulty && difficulty !== "mixed")
-      where.difficulty = String(difficulty);
+    if (difficulty && difficulty !== "mixed") where.difficulty = String(difficulty);
     if (excludeIds.length > 0) where.id = { notIn: excludeIds };
 
     const questions = await prisma.question.findMany({
       where,
       take: Math.min(parseInt(String(count)), 20),
       orderBy: { questionNumber: "asc" },
-      include: {
-        topic: { select: { name: true, slug: true } },
-      },
+      include: { topic: { select: { name: true, slug: true } } },
     });
 
     const safeQuestions = questions.map((q) => ({
@@ -39,63 +32,86 @@ router.get("/", async (req: any, res: Response) => {
       isFree: q.isFree,
     }));
 
-    return res.status(200).json({
-      success: true,
-      data: safeQuestions,
-      count: safeQuestions.length,
-    });
+    return res.status(200).json({ success: true, data: safeQuestions, count: safeQuestions.length });
   } catch (error) {
     console.error("Questions fetch error:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch questions. Please try again.",
-    });
+    return res.status(500).json({ success: false, error: "Failed to fetch questions." });
   }
 });
 
-// GET single question by ID — AUTH REQUIRED
+// GET /api/questions/search — search questions by keyword
+router.get("/search", async (req: any, res: Response) => {
+  try {
+    const { q, topic, difficulty, page } = req.query;
+    const pageNum = Math.max(0, parseInt(String(page || "0")));
+    const pageSize = 20;
+
+    if (!q || String(q).trim().length < 2) {
+      return res.status(400).json({ success: false, error: "Search query must be at least 2 characters." });
+    }
+
+    const searchTerm = String(q).trim();
+
+    const where: any = {
+      questionText: { contains: searchTerm, mode: "insensitive" },
+    };
+
+    if (topic && topic !== "all") where.topic = { slug: String(topic) };
+    if (difficulty && difficulty !== "all") where.difficulty = String(difficulty);
+
+    const [questions, total] = await Promise.all([
+      prisma.question.findMany({
+        where,
+        take: pageSize,
+        skip: pageNum * pageSize,
+        orderBy: { questionNumber: "asc" },
+        include: {
+          topic: { select: { name: true, slug: true, icon: true } },
+          paper: { select: { title: true, year: true, session: true } },
+        },
+      }),
+      prisma.question.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: questions,
+      total,
+      page: pageNum,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+      query: searchTerm,
+    });
+  } catch (error) {
+    console.error("Search error:", error);
+    return res.status(500).json({ success: false, error: "Search failed. Please try again." });
+  }
+});
+
+// GET single question by ID — AUTH OPTIONAL
 router.get("/:id", async (req: AuthRequest, res: Response) => {
   try {
     const question = await prisma.question.findUnique({
       where: { id: String(req.params.id) },
       include: {
         topic: { select: { name: true, slug: true, icon: true } },
-        paper: {
-          select: {
-            title: true,
-            year: true,
-            session: true,
-            paperNumber: true,
-          },
-        },
+        paper: { select: { title: true, year: true, session: true, paperNumber: true } },
       },
     });
 
     if (!question) {
-      return res.status(404).json({
-        success: false,
-        error: "Question not found",
-      });
+      return res.status(404).json({ success: false, error: "Question not found" });
     }
 
     let hasPremium = false;
-
-    // Optionally decode token if present — auth is not required to view question
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
         const jwt = require("jsonwebtoken");
-        const decoded = jwt.verify(
-          authHeader.split(" ")[1],
-          process.env.JWT_SECRET as string
-        ) as { userId: string };
+        const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET as string) as { userId: string };
         if (decoded?.userId) {
           const subscription = await prisma.subscription.findFirst({
-            where: {
-              userId: decoded.userId,
-              status: "active",
-              expiresAt: { gt: new Date() },
-            },
+            where: { userId: decoded.userId, status: "active", expiresAt: { gt: new Date() } },
           });
           hasPremium = !!subscription;
         }
@@ -105,25 +121,19 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
     }
 
     const canViewSolution = question.isFree || hasPremium;
-
     const responseData = {
       ...question,
       solutionSteps: canViewSolution ? question.solutionSteps : null,
       solutionText: canViewSolution ? question.solutionText : null,
+      correctAnswer: canViewSolution ? (question as any).correctAnswer : null,
       locked: !canViewSolution,
       upgradeUrl: !canViewSolution ? "/upgrade" : null,
     };
 
-    return res.status(200).json({
-      success: true,
-      data: responseData,
-    });
+    return res.status(200).json({ success: true, data: responseData });
   } catch (error) {
     console.error("Question fetch error:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch question. Please try again.",
-    });
+    return res.status(500).json({ success: false, error: "Failed to fetch question." });
   }
 });
 

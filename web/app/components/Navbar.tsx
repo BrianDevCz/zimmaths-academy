@@ -24,6 +24,7 @@ export default function Navbar() {
     { href: "/daily", label: "Daily Challenge" },
     { href: "/leaderboard", label: "Leaderboard" },
     { href: "/ai-tutor", label: "AI Tutor" },
+    { href: "/search", label: "🔍 Search" },
   ];
 
   return (
