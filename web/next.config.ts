@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               // Only load scripts from self and trusted CDNs
-              "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://upload.uploadcare.com",
+              "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://upload.uploadcare.com https://static.cloudflareinsights.com",
               // Styles from self and Google Fonts
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
               // Images from self, data URIs, and our CDNs
@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
               // Frames — YouTube, GeoGebra, Vimeo
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.geogebra.org https://player.vimeo.com",
               // API connections
-              "connect-src 'self' https://zimmaths-academy-production.up.railway.app https://upload.uploadcare.com https://api.anthropic.com https://openrouter.ai",
+              "connect-src 'self' https://zimmaths-academy-production.up.railway.app https://upload.uploadcare.com https://api.anthropic.com https://openrouter.ai https://cloudflareinsights.com",
               // Media (camera/microphone for OCR)
               "media-src 'self' blob:",
               // Workers (for KaTeX)
