@@ -25,6 +25,8 @@ const TOPICS = [
   { slug: "measurement-estimation", name: "Measurement & Estimation" },
 ];
 
+const SUGGESTIONS = ["quadratic", "sine rule", "probability", "vectors", "compound interest", "matrices"];
+
 export default function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -44,14 +46,14 @@ export default function SearchPage() {
 
   // Search on mount if query in URL
   useEffect(() => {
-    if (searchParams.get("q")) {
-      handleSearch(0);
-    }
+    const q = searchParams.get("q");
+    if (q) searchByTerm(q, 0, searchParams.get("topic") || "all", searchParams.get("difficulty") || "all");
     inputRef.current?.focus();
   }, []);
 
-  const handleSearch = async (pageNum = 0) => {
-    if (!query.trim() || query.trim().length < 2) {
+  // Core search function — takes term directly to avoid state timing issues
+  const searchByTerm = async (term: string, pageNum = 0, topicFilter = topic, difficultyFilter = difficulty) => {
+    if (!term.trim() || term.trim().length < 2) {
       setError("Please enter at least 2 characters to search.");
       return;
     }
@@ -62,10 +64,10 @@ export default function SearchPage() {
 
     try {
       const params = new URLSearchParams();
-      params.set("q", query.trim());
+      params.set("q", term.trim());
       params.set("page", String(pageNum));
-      if (topic !== "all") params.set("topic", topic);
-      if (difficulty !== "all") params.set("difficulty", difficulty);
+      if (topicFilter !== "all") params.set("topic", topicFilter);
+      if (difficultyFilter !== "all") params.set("difficulty", difficultyFilter);
 
       // Update URL
       router.replace(`/search?${params.toString()}`, { scroll: false });
@@ -80,13 +82,18 @@ export default function SearchPage() {
         setPage(pageNum);
       } else {
         setError(data.error || "Search failed.");
+        setResults([]);
       }
     } catch {
       setError("Search failed. Please try again.");
+      setResults([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Wrapper for search bar — reads from state
+  const handleSearch = (pageNum = 0) => searchByTerm(query, pageNum, topic, difficulty);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch(0);
@@ -154,7 +161,7 @@ export default function SearchPage() {
         )}
 
         {/* Results count */}
-        {searched && !loading && (
+        {searched && !loading && !error && (
           <p className="text-gray-500 text-sm mb-4">
             {total === 0
               ? `No results for "${query}"`
@@ -170,14 +177,14 @@ export default function SearchPage() {
         )}
 
         {/* No results */}
-        {searched && !loading && total === 0 && (
+        {searched && !loading && total === 0 && !error && (
           <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
             <div className="text-5xl mb-4">🔍</div>
             <h2 className="text-xl font-bold text-gray-800 mb-2">No questions found</h2>
             <p className="text-gray-500 mb-4">Try different keywords or remove filters.</p>
-            <div className="text-sm text-gray-400 space-y-1">
-              <p>Tips:</p>
-              <p>• Use simpler keywords — "factorise" instead of "factorisation"</p>
+            <div className="text-sm text-gray-400 space-y-1 text-left max-w-xs mx-auto">
+              <p className="font-medium text-gray-500 mb-2">Tips:</p>
+              <p>• Use simpler keywords — "factorise" not "factorisation"</p>
               <p>• Try a topic name — "trigonometry" or "probability"</p>
               <p>• Search for a concept — "sine rule" or "compound interest"</p>
             </div>
@@ -189,7 +196,6 @@ export default function SearchPage() {
           <div className="space-y-4">
             {results.map((q: any) => (
               <div key={q.id} className="bg-white rounded-2xl shadow p-6 border border-gray-200">
-                {/* Meta */}
                 <div className="flex gap-2 mb-3 flex-wrap">
                   <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-medium">
                     {q.topic?.icon} {q.topic?.name}
@@ -210,37 +216,28 @@ export default function SearchPage() {
                     </span>
                   )}
                   {q.isFree && (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium">
-                      Free
-                    </span>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium">Free</span>
                   )}
                 </div>
 
-                {/* Question text */}
                 <div className="text-gray-800 leading-relaxed mb-4">
                   <MathContent>{q.questionText || ""}</MathContent>
                 </div>
 
-                {/* Question image */}
                 {q.questionImageUrl && (
                   <img src={q.questionImageUrl} alt="diagram"
                     className="max-w-full max-h-48 rounded-lg border border-gray-200 object-contain mb-4" />
                 )}
 
-                {/* Actions */}
                 <div className="flex gap-3 flex-wrap">
-                  {q.paperId ? (
-                    <Link
-                      href={`/papers/${q.paperId}/questions/${q.id}`}
-                      className="bg-brand-700 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
-                    >
+                  {q.paperId && (
+                    <Link href={`/papers/${q.paperId}/questions/${q.id}`}
+                      className="bg-brand-700 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
                       View Solution
                     </Link>
-                  ) : null}
-                  <Link
-                    href={`/topics/${q.topic?.slug}`}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition"
-                  >
+                  )}
+                  <Link href={`/topics/${q.topic?.slug}`}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition">
                     {q.topic?.icon} Study Topic
                   </Link>
                 </div>
@@ -254,18 +251,12 @@ export default function SearchPage() {
                   Page {page + 1} of {totalPages} ({total} results)
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSearch(page - 1)}
-                    disabled={page === 0}
-                    className="px-4 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition"
-                  >
+                  <button onClick={() => handleSearch(page - 1)} disabled={page === 0}
+                    className="px-4 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
                     ← Previous
                   </button>
-                  <button
-                    onClick={() => handleSearch(page + 1)}
-                    disabled={page >= totalPages - 1}
-                    className="px-4 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition"
-                  >
+                  <button onClick={() => handleSearch(page + 1)} disabled={page >= totalPages - 1}
+                    className="px-4 py-2 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
                     Next →
                   </button>
                 </div>
@@ -281,10 +272,10 @@ export default function SearchPage() {
             <h2 className="text-xl font-bold text-gray-800 mb-2">Search ZIMSEC Questions</h2>
             <p className="text-gray-500 mb-6">Find questions by topic, concept or keyword</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-lg mx-auto">
-              {["quadratic", "sine rule", "probability", "vectors", "compound interest", "matrices"].map((term) => (
+              {SUGGESTIONS.map((term) => (
                 <button
                   key={term}
-                  onClick={() => { setQuery(term); setTimeout(() => handleSearch(0), 100); }}
+                  onClick={() => { setQuery(term); searchByTerm(term, 0, topic, difficulty); }}
                   className="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-2 rounded-lg text-sm font-medium transition"
                 >
                   {term}
