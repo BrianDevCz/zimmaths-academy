@@ -1,17 +1,20 @@
 import { Router, Response, Request } from "express";
-import prisma from '../lib/prisma';
 import { AuthRequest } from "../middleware/auth";
 import { z } from "zod";
+import prisma from "../lib/prisma";
 const { Paynow } = require("paynow");
 
 const router = Router();
 
 // Initialize Paynow
+const PAYNOW_RESULT_URL = process.env.PAYNOW_RESULT_URL || "https://zimmaths-academy-production.up.railway.app/api/subscriptions/paynow-webhook";
+const PAYNOW_RETURN_URL = process.env.PAYNOW_RETURN_URL || "https://zimmaths.com/payment/success";
+
 const paynow = new Paynow(
   process.env.PAYNOW_INTEGRATION_ID,
   process.env.PAYNOW_INTEGRATION_KEY,
-  process.env.PAYNOW_RESULT_URL,
-  process.env.PAYNOW_RETURN_URL
+  PAYNOW_RESULT_URL,
+  PAYNOW_RETURN_URL
 );
 
 const plans: Record<string, { label: string; price: number; days: number }> = {
@@ -20,21 +23,17 @@ const plans: Record<string, { label: string; price: number; days: number }> = {
   annual: { label: "1 Year", price: 45, days: 365 },
 };
 
-// In-memory lock to prevent duplicate payments from same user within 10 seconds
-const paymentLocks = new Map<string, number>();
-
-function acquireLock(userId: string): boolean {
-  const now = Date.now();
-  const lastAttempt = paymentLocks.get(userId);
-  if (lastAttempt && now - lastAttempt < 10000) {
-    return false; // locked — too soon
-  }
-  paymentLocks.set(userId, now);
-  return true;
-}
-
-function releaseLock(userId: string) {
-  paymentLocks.delete(userId);
+// ── DB-based lock — survives restarts & multiple instances ────
+async function acquireLock(userId: string): Promise<boolean> {
+  const tenSecondsAgo = new Date(Date.now() - 10000);
+  const recentPending = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      status: "pending",
+      startedAt: { gt: tenSecondsAgo },
+    },
+  });
+  return !recentPending;
 }
 
 // Helper — find subscription by reference string
@@ -54,7 +53,6 @@ async function findByReference(reference: string) {
 
 // Helper — activate subscription by id
 async function activateSubscription(id: string, userId: string) {
-  // Check if already active to prevent double activation
   const existing = await prisma.subscription.findUnique({ where: { id } });
   if (existing?.status === "active") {
     console.log(`Subscription ${id} already active — skipping duplicate activation`);
@@ -114,10 +112,7 @@ router.get("/status/:reference", async (req: AuthRequest, res: Response) => {
     const reference = String(req.params.reference || "");
 
     const subscription = await prisma.subscription.findFirst({
-      where: {
-        userId: req.userId,
-        paymentReference: reference,
-      },
+      where: { userId: req.userId, paymentReference: reference },
     });
 
     if (!subscription) {
@@ -145,7 +140,6 @@ router.get("/poll-paynow", async (req: AuthRequest, res: Response) => {
     }
 
     const { pollUrl } = req.query;
-
     if (!pollUrl) {
       return res.status(400).json({ success: false, error: "Poll URL required." });
     }
@@ -154,7 +148,6 @@ router.get("/poll-paynow", async (req: AuthRequest, res: Response) => {
     console.log("Paynow poll result:", status);
 
     if (status.paid || status.status?.toLowerCase() === "paid") {
-      // Find and activate — with duplicate protection inside activateSubscription
       const subscription = await prisma.subscription.findFirst({
         where: { userId: req.userId },
         orderBy: { startedAt: "desc" },
@@ -190,8 +183,9 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ success: false, error: "User not authenticated" });
     }
 
-    // Idempotency lock — prevent double payments within 10 seconds
-    if (!acquireLock(req.userId)) {
+    // DB-based lock — prevent double payments within 10 seconds
+    const locked = await acquireLock(req.userId);
+    if (!locked) {
       return res.status(429).json({
         success: false,
         error: "Payment already in progress. Please wait a moment.",
@@ -208,7 +202,6 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
 
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      releaseLock(req.userId);
       return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
     }
 
@@ -225,14 +218,13 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
     });
 
     if (existingActive) {
-      releaseLock(req.userId);
       return res.status(400).json({
         success: false,
         error: "You already have an active subscription.",
       });
     }
 
-    // Check for a pending payment initiated in the last 2 minutes — prevent duplicates
+    // Check for a pending payment initiated in the last 2 minutes
     const recentPending = await prisma.subscription.findFirst({
       where: {
         userId: req.userId,
@@ -242,7 +234,6 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
     });
 
     if (recentPending) {
-      releaseLock(req.userId);
       return res.status(400).json({
         success: false,
         error: "A payment is already pending. Please complete or wait 2 minutes before trying again.",
@@ -296,8 +287,6 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
 
     console.log("Paynow response:", response);
 
-    releaseLock(req.userId);
-
     if (response && response.success) {
       return res.status(200).json({
         success: true,
@@ -318,7 +307,6 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       });
     }
   } catch (error) {
-    if (req.userId) releaseLock(req.userId);
     console.error("Subscription initiate error:", error);
     return res.status(500).json({ success: false, error: "Failed to initiate payment. Please try again." });
   }
