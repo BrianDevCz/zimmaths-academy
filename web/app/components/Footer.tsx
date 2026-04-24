@@ -20,8 +20,8 @@ function PaymentBadge({ logo }: { logo: typeof PAYMENT_LOGOS[0] }) {
     return (
       <div
         title={logo.label}
-        className="flex items-center justify-center rounded-md text-white text-xs font-bold w-14 h-7"
-        style={{ backgroundColor: logo.fallbackColor }}
+        className="flex items-center justify-center rounded-lg text-white text-xs font-bold"
+        style={{ backgroundColor: logo.fallbackColor, width: 56, height: 36 }}
       >
         {logo.fallbackText}
       </div>
@@ -29,13 +29,17 @@ function PaymentBadge({ logo }: { logo: typeof PAYMENT_LOGOS[0] }) {
   }
 
   return (
-    <div title={logo.label} className="bg-white rounded-md px-2 py-1 flex items-center justify-center h-7 w-14">
+    <div
+      title={logo.label}
+      className="bg-white rounded-lg flex items-center justify-center overflow-hidden"
+      style={{ width: 56, height: 36, padding: 6 }}
+    >
       <Image
         src={logo.src}
         alt={logo.label}
-        width={48}
-        height={20}
-        className="object-contain"
+        width={44}
+        height={24}
+        className="object-contain w-full h-full"
         onError={() => setImgError(true)}
       />
     </div>
