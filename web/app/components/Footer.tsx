@@ -1,9 +1,46 @@
 "use client";
 import { useAuth } from "../context/AuthContext";
+import Image from "next/image";
+import { useState } from "react";
 
 const WHATSAPP_NUMBER = "263714390637";
 const WHATSAPP_MESSAGE = "Hello ZimMaths Academy! I need help with:";
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+
+const PAYMENT_LOGOS = [
+  { id: "ecocash", label: "EcoCash", src: "/logos/ecocash.png", fallbackColor: "#E63946", fallbackText: "EC" },
+  { id: "innbucks", label: "Innbucks", src: "/logos/innbucks.png", fallbackColor: "#2196F3", fallbackText: "IB" },
+  { id: "omari", label: "Omari", src: "/logos/omari.png", fallbackColor: "#4CAF50", fallbackText: "OM" },
+];
+
+function PaymentBadge({ logo }: { logo: typeof PAYMENT_LOGOS[0] }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (imgError) {
+    return (
+      <div
+        title={logo.label}
+        className="flex items-center justify-center rounded-md text-white text-xs font-bold w-14 h-7"
+        style={{ backgroundColor: logo.fallbackColor }}
+      >
+        {logo.fallbackText}
+      </div>
+    );
+  }
+
+  return (
+    <div title={logo.label} className="bg-white rounded-md px-2 py-1 flex items-center justify-center h-7 w-14">
+      <Image
+        src={logo.src}
+        alt={logo.label}
+        width={48}
+        height={20}
+        className="object-contain"
+        onError={() => setImgError(true)}
+      />
+    </div>
+  );
+}
 
 export default function Footer() {
   const { user, isPremium } = useAuth();
@@ -22,6 +59,20 @@ export default function Footer() {
           <p className="text-brand-300 text-sm leading-relaxed">
             Zimbabwe's O-Level Mathematics Study Portal. Built for ZIMSEC students. Affordable. Accessible. Exam-focused.
           </p>
+
+          {/* Payment logos — only for non-premium or logged out users */}
+          {!isPremium && (
+            <div className="mt-4">
+              <p className="text-brand-400 text-xs mb-2">Upgrade from $3 · Pay via:</p>
+              <div className="flex items-center gap-2">
+                {PAYMENT_LOGOS.map((logo) => (
+                  <a key={logo.id} href="/upgrade" title={`Pay with ${logo.label}`}>
+                    <PaymentBadge logo={logo} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Study Links */}
@@ -74,9 +125,7 @@ export default function Footer() {
             </svg>
             Chat on WhatsApp
           </a>
-          <p className="text-brand-400 text-xs mt-3">
-            Mon–Sat · 8am–8pm CAT
-          </p>
+          <p className="text-brand-400 text-xs mt-3">Mon–Sat · 8am–8pm CAT</p>
         </div>
 
       </div>
@@ -86,7 +135,6 @@ export default function Footer() {
         <p className="text-sm text-brand-400">© 2026 ZimMaths Academy · zimmaths.com</p>
         <p className="text-sm text-brand-400">Built for Zimbabwe's O-Level students 🇿🇼</p>
       </div>
-
     </footer>
   );
 }
