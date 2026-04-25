@@ -82,6 +82,58 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
   }
 });
 
+// PUT /api/admin/users/:id/role
+router.put("/users/:id/role", async (req: AuthRequest, res: Response) => {
+  try {
+    const { role } = req.body;
+    if (!["student", "admin"].includes(role)) return res.status(400).json({ success: false, error: "Invalid role." });
+    const user = await prisma.user.update({ where: { id: String(req.params.id) }, data: { role } });
+    return res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    console.error("Admin update role error:", error);
+    return res.status(500).json({ success: false, error: "Failed to update role." });
+  }
+});
+
+// DELETE /api/admin/users/:id
+router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = String(req.params.id);
+
+    // Prevent deleting yourself
+    if (userId === req.userId) {
+      return res.status(400).json({ success: false, error: "You cannot delete your own account." });
+    }
+
+    // Check user exists
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found." });
+    }
+
+    // Prevent deleting other admins
+    if (user.role === "admin") {
+      return res.status(400).json({ success: false, error: "Cannot delete an admin account." });
+    }
+
+    // Delete related data first to avoid FK constraint errors
+    await prisma.userPoint.deleteMany({ where: { userId } });
+    await prisma.userBadge.deleteMany({ where: { userId } });
+    await prisma.bookmark.deleteMany({ where: { userId } });
+    await prisma.userLessonProgress.deleteMany({ where: { userId } });
+    await prisma.dailyChallengeAttempt.deleteMany({ where: { userId } });
+    await prisma.practiceTest.deleteMany({ where: { userId } });
+    await prisma.aiChatUsage.deleteMany({ where: { userId } });
+    await prisma.subscription.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+
+    return res.status(200).json({ success: true, message: "User deleted successfully." });
+  } catch (error) {
+    console.error("Admin delete user error:", error);
+    return res.status(500).json({ success: false, error: "Failed to delete user." });
+  }
+});
+
 // GET /api/admin/papers
 router.get("/papers", async (req: AuthRequest, res: Response) => {
   try {
@@ -283,19 +335,6 @@ router.get("/subscriptions", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT /api/admin/users/:id/role
-router.put("/users/:id/role", async (req: AuthRequest, res: Response) => {
-  try {
-    const { role } = req.body;
-    if (!["student", "admin"].includes(role)) return res.status(400).json({ success: false, error: "Invalid role." });
-    const user = await prisma.user.update({ where: { id: String(req.params.id) }, data: { role } });
-    return res.status(200).json({ success: true, data: user });
-  } catch (error) {
-    console.error("Admin update role error:", error);
-    return res.status(500).json({ success: false, error: "Failed to update role." });
-  }
-});
-
 // PUT /api/admin/subscriptions/:userId/activate
 router.put("/subscriptions/:userId/activate", async (req: AuthRequest, res: Response) => {
   try {
@@ -397,12 +436,10 @@ router.delete("/lessons/:id", async (req: AuthRequest, res: Response) => {
 
 // ── Daily Challenge Admin Routes ──────────────────────────────
 
-// GET /api/admin/daily-challenges
 router.get("/daily-challenges", async (req: AuthRequest, res: Response) => {
   try {
     const challenges = await prisma.dailyChallenge.findMany({
-      orderBy: { date: "desc" },
-      take: 60,
+      orderBy: { date: "desc" }, take: 60,
       include: { question: { include: { topic: { select: { name: true } } } } },
     });
     return res.status(200).json({ success: true, data: challenges });
@@ -412,12 +449,10 @@ router.get("/daily-challenges", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/admin/daily-eligible-questions
 router.get("/daily-eligible-questions", async (req: AuthRequest, res: Response) => {
   try {
     const questions = await prisma.question.findMany({
-      where: { isDailyEligible: true },
-      orderBy: { questionNumber: "asc" },
+      where: { isDailyEligible: true }, orderBy: { questionNumber: "asc" },
       include: { topic: { select: { name: true } } },
     });
     return res.status(200).json({ success: true, data: questions });
@@ -427,7 +462,6 @@ router.get("/daily-eligible-questions", async (req: AuthRequest, res: Response) 
   }
 });
 
-// POST /api/admin/daily-challenges
 router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
   try {
     const schema = z.object({
@@ -443,19 +477,14 @@ router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
     const existing = await prisma.dailyChallenge.findFirst({
       where: { date: { gte: dateObj, lt: new Date(dateObj.getTime() + 24 * 60 * 60 * 1000) } },
     });
-
     if (existing) {
-      return res.status(400).json({
-        success: false,
-        error: `A challenge is already scheduled for ${parsed.data.date}. Delete it first.`,
-      });
+      return res.status(400).json({ success: false, error: `A challenge is already scheduled for ${parsed.data.date}. Delete it first.` });
     }
 
     const challenge = await prisma.dailyChallenge.create({
       data: { questionId: parsed.data.questionId, date: dateObj },
       include: { question: { include: { topic: { select: { name: true } } } } },
     });
-
     return res.status(201).json({ success: true, data: challenge });
   } catch (error) {
     console.error("Admin schedule challenge error:", error);
@@ -463,7 +492,6 @@ router.post("/daily-challenges", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /api/admin/daily-challenges/:id
 router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -478,7 +506,6 @@ router.delete("/daily-challenges/:id", async (req: AuthRequest, res: Response) =
 
 // ── Analytics ─────────────────────────────────────────────────
 
-// GET /api/admin/analytics
 router.get("/analytics", async (req: AuthRequest, res: Response) => {
   try {
     const days = 30;
@@ -535,7 +562,6 @@ router.get("/analytics", async (req: AuthRequest, res: Response) => {
 
 // ── Badges ────────────────────────────────────────────────────
 
-// GET /api/admin/badges
 router.get("/badges", async (req: AuthRequest, res: Response) => {
   try {
     const [badgeStats, recentBadges] = await Promise.all([

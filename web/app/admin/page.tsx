@@ -425,6 +425,22 @@ export default function AdminPage() {
     } catch { setFormError("Failed to cancel subscription."); }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Permanently delete "${userName}"? This will delete all their data including points, badges, bookmarks and practice history. This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+        method: "DELETE", headers: getHeaders(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage(`User "${userName}" deleted successfully.`);
+        fetchUsers(userSearch, userPage);
+      } else {
+        setFormError(data.error);
+      }
+    } catch { setFormError("Failed to delete user."); }
+  };
+
   const downloadTemplate = () => {
     const csv = [
       "topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle",
@@ -1327,13 +1343,21 @@ export default function AdminPage() {
                       </td>
                       <td className="py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
                       <td className="py-3">
-                        <select onChange={(e) => { if (e.target.value) handleActivateSubscription(u.id, e.target.value); e.target.value = ""; }}
-                          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600" defaultValue="">
-                          <option value="">Activate...</option>
-                          <option value="two_weeks">2 Weeks</option>
-                          <option value="monthly">Monthly</option>
-                          <option value="annual">Annual</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select onChange={(e) => { if (e.target.value) handleActivateSubscription(u.id, e.target.value); e.target.value = ""; }}
+                            className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600" defaultValue="">
+                            <option value="">Activate...</option>
+                            <option value="two_weeks">2 Weeks</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annual">Annual</option>
+                          </select>
+                          {u.role !== "admin" && (
+                            <button onClick={() => handleDeleteUser(u.id, u.name)}
+                              className="text-red-500 hover:text-red-700 text-xs font-semibold whitespace-nowrap">
+                              🗑 Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
