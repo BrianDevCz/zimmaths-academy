@@ -1,20 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// These routes require a logged-in account
-// Papers list (/papers) and Topics list (/topics) are PUBLIC
-// But individual paper questions and lesson content are protected
-const protectedRoutes = [
-  "/practice",
-  "/daily",
-  "/ai-tutor",
-  "/dashboard",
-  "/profile",
-  "/upgrade",
-  "/papers/",        // individual paper pages e.g. /papers/123
-  "/topics/",        // individual topic/lesson pages e.g. /topics/algebra
-];
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("zim_token")?.value;
@@ -28,6 +14,9 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/upgrade") ||
+    pathname.startsWith("/bookmarks") ||
+    pathname.startsWith("/badges") ||
+    pathname.startsWith("/admin") ||
     (pathname.startsWith("/papers/") && pathname.length > "/papers/".length) ||
     (pathname.startsWith("/topics/") && pathname.length > "/topics/".length);
 
@@ -48,6 +37,9 @@ export const config = {
     "/dashboard/:path*",
     "/profile/:path*",
     "/upgrade/:path*",
+    "/bookmarks/:path*",
+    "/badges/:path*",
+    "/admin/:path*",
     "/papers/:path*",
     "/topics/:path*",
   ],
