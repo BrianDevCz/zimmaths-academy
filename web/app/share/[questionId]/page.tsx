@@ -16,9 +16,10 @@ export async function generateMetadata({
     const data = await res.json();
     const q = data?.data;
     const topic = q?.topic?.name || "Maths";
-    const title = `ZimMaths — ${topic} Question`;
-    const description = `Can you solve this ${topic} question? Practice at zimmaths.com`;
+    const title = `Can you solve this ${topic} question? | ZimMaths`;
+    const description = `Someone challenged you with this ZIMSEC O-Level ${topic} question. Think you can solve it? Join ZimMaths — Zimbabwe's #1 Maths platform.`;
     const imageUrl = `${API_URL}/api/share/${questionId}`;
+
     return {
       title,
       description,
@@ -38,7 +39,11 @@ export async function generateMetadata({
       },
     };
   } catch {
-    return { title: "ZimMaths — Maths Question" };
+    return {
+      title: "Can you solve this? | ZimMaths",
+      description:
+        "Someone challenged you with a ZIMSEC O-Level Maths question. Join ZimMaths — Zimbabwe's #1 Maths platform.",
+    };
   }
 }
 
