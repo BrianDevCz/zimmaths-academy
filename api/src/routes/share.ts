@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
-import { createCanvas, registerFont, CanvasRenderingContext2D } from "canvas";
-import prisma from "../lib/prisma";
+import { createCanvas, CanvasRenderingContext2D } from "canvas";
 import path from "path";
+import prisma from "../lib/prisma";
 
 // Point fontconfig to our config file so canvas finds DejaVu fonts
 process.env.FONTCONFIG_FILE = path.resolve(__dirname, "../../fonts.conf");
@@ -80,7 +80,11 @@ function difficultyColor(difficulty: string): string {
 
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
 ) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -115,7 +119,6 @@ function wrapTextCanvas(
       currentLine = test;
     } else {
       if (currentLine) lines.push(currentLine);
-      // If a single word is too long, truncate it
       if (ctx.measureText(word).width > maxWidth) {
         let truncated = "";
         for (const ch of word) {
@@ -146,19 +149,6 @@ function wrapTextCanvas(
   return displayLines.length;
 }
 
-// ── Debug endpoint ─────────────────────────────────────────────────
-
-router.get("/debug/fonts", async (req: Request, res: Response) => {
-  const { execSync } = require("child_process");
-  try {
-    const fcList = execSync("fc-list 2>&1 || echo 'fc-list not found'").toString();
-    const fcMatch = execSync("fc-match 'DejaVu Sans' 2>&1 || echo 'fc-match not found'").toString();
-    res.json({ fcList: fcList.slice(0, 3000), fcMatch });
-  } catch (e: any) {
-    res.json({ error: e.message });
-  }
-});
-
 // ── Main share route ───────────────────────────────────────────────
 
 router.get("/:questionId", async (req: Request, res: Response) => {
@@ -176,7 +166,10 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     }
 
     const cleanText = stripLatex(question.questionText);
-    const topicName = (question.topic?.name || "Mathematics").replace(/[^\x00-\x7F]/g, "");
+    const topicName = (question.topic?.name || "Mathematics").replace(
+      /[^\x00-\x7F]/g,
+      ""
+    );
     const difficulty = question.difficulty;
     const marks = question.marks;
     const diffColor = difficultyColor(difficulty);
@@ -241,7 +234,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
 
     // Difficulty badge
     const diffBadgeX = 90 + topicBadgeW + 20;
-    ctx.fillStyle = diffColor + "26"; // 15% opacity
+    ctx.fillStyle = diffColor + "26";
     drawRoundedRect(ctx, diffBadgeX, 88, 120, 40, 20);
     ctx.fill();
     ctx.font = "bold 17px 'DejaVu Sans', sans-serif";
@@ -258,7 +251,11 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     ctx.font = "bold 17px 'DejaVu Sans', sans-serif";
     ctx.fillStyle = "#1565C0";
     ctx.textAlign = "center";
-    ctx.fillText(`${marks} mark${marks !== 1 ? "s" : ""}`, marksBadgeX + 60, 114);
+    ctx.fillText(
+      `${marks} mark${marks !== 1 ? "s" : ""}`,
+      marksBadgeX + 60,
+      114
+    );
     ctx.textAlign = "left";
 
     // Separator line
@@ -275,7 +272,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     wrapTextCanvas(ctx, cleanText, 90, 200, 1020, 46, 5);
 
     // ── Footer ─────────────────────────────────────────────────
-    // Bottom accent
+    // Bottom accent line on card
     ctx.fillStyle = "#42A5F5";
     ctx.fillRect(55, 510, 1090, 4);
 
@@ -283,36 +280,36 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     ctx.fillStyle = "#0D47A1";
     ctx.fillRect(55, 514, 1090, 96);
 
-    // Footer bottom accent
+    // Footer bottom rounded accent
     ctx.fillStyle = "#0D47A1";
     drawRoundedRect(ctx, 55, 606, 1090, 4, 4);
     ctx.fill();
 
-    // ZIMMATHS text
+    // Logo: ZIM MATHS .com — properly spaced
     ctx.font = "bold 34px 'DejaVu Sans', sans-serif";
     ctx.fillStyle = "white";
     ctx.fillText("ZIM", 100, 562);
     ctx.fillStyle = "#64B5F6";
-    ctx.fillText("MATHS", 163, 562);
-    ctx.font = "17px 'DejaVu Sans', sans-serif";
+    ctx.fillText("MATHS", 168, 562);
+    ctx.font = "15px 'DejaVu Sans', sans-serif";
     ctx.fillStyle = "#90CAF9";
-    ctx.fillText(".com", 270, 562);
+    ctx.fillText(".com", 300, 555);
 
     // Vertical separator
     ctx.strokeStyle = "rgba(66, 165, 245, 0.4)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(305, 528);
-    ctx.lineTo(305, 604);
+    ctx.moveTo(340, 528);
+    ctx.lineTo(340, 604);
     ctx.stroke();
 
-    // Tagline
-    ctx.font = "20px 'DejaVu Sans', sans-serif";
+    // Tagline — two lines
+    ctx.font = "18px 'DejaVu Sans', sans-serif";
     ctx.fillStyle = "#BBDEFB";
-    ctx.fillText("Zimbabwe's #1 Maths Platform", 330, 558);
-    ctx.font = "17px 'DejaVu Sans', sans-serif";
+    ctx.fillText("Zimbabwe's #1 Maths Platform", 370, 554);
+    ctx.font = "15px 'DejaVu Sans', sans-serif";
     ctx.fillStyle = "#90CAF9";
-    ctx.fillText("Practice - Learn - Excel", 330, 590);
+    ctx.fillText("Practice - Learn - Excel", 370, 582);
 
     // Visit site button
     ctx.fillStyle = "#2196F3";
@@ -333,7 +330,6 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(pngBuffer);
-
   } catch (error) {
     console.error("Share card error:", error);
     res.status(500).json({ error: "Failed to generate share card" });
