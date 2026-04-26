@@ -2,7 +2,6 @@
 import MathContent from "../../components/MathContent";
 import Link from "next/link";
 import { useAuth } from "../../context/AuthContext";
-import { API_URL } from "@/app/lib/api";
 
 export default function QuestionCard({
   question,
@@ -40,13 +39,9 @@ export default function QuestionCard({
               {question.marks} marks
             </span>
             {question.isFree ? (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">
-                Free
-              </span>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">Free</span>
             ) : (
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-semibold">
-                Premium
-              </span>
+              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-semibold">Premium</span>
             )}
           </div>
         </div>
@@ -91,14 +86,13 @@ export default function QuestionCard({
           </Link>
         )}
 
-        <a
-          href={`https://wa.me/?text=Can you solve this ZIMSEC Maths question? ${encodeURIComponent(question.questionText)} - See solution at zimmaths.com`}
-          target="_blank"
-          rel="noopener noreferrer"
+        {/* Share card link — no raw LaTeX in WhatsApp */}
+        <Link
+          href={`/share/${question.id}`}
           className="bg-green-500 hover:bg-green-400 text-white px-5 py-2 rounded-lg text-sm font-semibold transition"
         >
-          Share on WhatsApp
-        </a>
+          📤 Share
+        </Link>
       </div>
     </div>
   );
