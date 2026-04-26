@@ -2,7 +2,7 @@
   "$schema": "https://schema.railway.app/railway-schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run build"
+    "buildCommand": "apt-get install -y fonts-dejavu-core 2>/dev/null || true && npm run build"
   },
   "deploy": {
     "startCommand": "npm start",
