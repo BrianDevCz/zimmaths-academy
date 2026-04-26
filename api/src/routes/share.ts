@@ -1,7 +1,10 @@
 import { Router, Request, Response } from "express";
+import { createCanvas, registerFont, CanvasRenderingContext2D } from "canvas";
 import prisma from "../lib/prisma";
 
 const router = Router();
+
+// ── LaTeX to readable text ────────────────────────────────────────
 
 function latexToText(expr: string): string {
   return expr
@@ -69,61 +72,90 @@ function difficultyColor(difficulty: string): string {
   return "#FB8C00";
 }
 
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+// ── Canvas drawing helpers ─────────────────────────────────────────
+
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
-function wrapText(
-  text: string, x: number, y: number,
-  maxWidth: number, fontSize: number, color: string,
-  maxLines = 5
-): string {
-  const charsPerLine = Math.floor(maxWidth / (fontSize * 0.55));
+function wrapTextCanvas(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number = 5
+): number {
   const words = text.split(" ");
   const lines: string[] = [];
   let currentLine = "";
 
   for (const word of words) {
     const test = currentLine ? currentLine + " " + word : word;
-    if (test.length <= charsPerLine) {
+    const metrics = ctx.measureText(test);
+    if (metrics.width <= maxWidth) {
       currentLine = test;
     } else {
       if (currentLine) lines.push(currentLine);
-      currentLine = word.length > charsPerLine ? word.slice(0, charsPerLine - 3) + "..." : word;
+      // If a single word is too long, truncate it
+      if (ctx.measureText(word).width > maxWidth) {
+        let truncated = "";
+        for (const ch of word) {
+          if (ctx.measureText(truncated + ch + "...").width <= maxWidth) {
+            truncated += ch;
+          } else {
+            break;
+          }
+        }
+        currentLine = truncated + "...";
+      } else {
+        currentLine = word;
+      }
     }
   }
   if (currentLine) lines.push(currentLine);
 
   const displayLines = lines.slice(0, maxLines);
-  if (lines.length > maxLines) {
-    displayLines[maxLines - 1] = displayLines[maxLines - 1].slice(0, -3) + "...";
+  if (lines.length > maxLines && displayLines.length > 0) {
+    const last = displayLines[displayLines.length - 1];
+    displayLines[displayLines.length - 1] = last.slice(0, -3) + "...";
   }
 
-  return displayLines
-    .map((line, i) =>
-      `<text x="${x}" y="${y + i * (fontSize + 12)}" font-family="DejaVu Sans, sans-serif" font-size="${fontSize}" fill="${color}">${escapeXml(line)}</text>`
-    )
-    .join("\n  ");
+  displayLines.forEach((line, i) => {
+    ctx.fillText(line, x, y + i * lineHeight);
+  });
+
+  return displayLines.length;
 }
 
-// Debug endpoint — remove after testing
+// ── Debug endpoint ─────────────────────────────────────────────────
+
 router.get("/debug/fonts", async (req: Request, res: Response) => {
   const { execSync } = require("child_process");
   try {
     const fcList = execSync("fc-list 2>&1 || echo 'fc-list not found'").toString();
-    const lsFonts = execSync("ls -R /usr/share/fonts/ 2>&1 || echo 'no /usr/share/fonts'").toString();
-    const nixFonts = execSync("find /nix/store -name '*.ttf' 2>/dev/null | grep -i dejavu | head -10 || echo 'no nix dejavu'").toString();
-    const fontconfig = execSync("fc-match 'DejaVu Sans' 2>&1 || echo 'fc-match not found'").toString();
-    res.json({ fcList: fcList.slice(0, 3000), lsFonts: lsFonts.slice(0, 1000), nixFonts, fontconfig });
+    const fcMatch = execSync("fc-match 'DejaVu Sans' 2>&1 || echo 'fc-match not found'").toString();
+    res.json({ fcList: fcList.slice(0, 3000), fcMatch });
   } catch (e: any) {
     res.json({ error: e.message });
   }
 });
+
+// ── Main share route ───────────────────────────────────────────────
 
 router.get("/:questionId", async (req: Request, res: Response) => {
   try {
@@ -145,63 +177,154 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     const marks = question.marks;
     const diffColor = difficultyColor(difficulty);
 
-    const topicBadgeW = topicName.length * 12 + 50;
-    const diffBadgeX = topicBadgeW + 110;
-    const marksBadgeX = diffBadgeX + 130;
+    // ── Create canvas ──────────────────────────────────────────
+    const W = 1200;
+    const H = 630;
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext("2d");
 
-    const svg = `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1565C0"/>
-      <stop offset="100%" style="stop-color:#0D47A1"/>
-    </linearGradient>
-    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff"/>
-      <stop offset="100%" style="stop-color:#E3F2FD"/>
-    </linearGradient>
-  </defs>
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, "#1565C0");
+    bgGrad.addColorStop(1, "#0D47A1");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
 
-  <rect width="1200" height="630" fill="url(#bg)"/>
-  <circle cx="1100" cy="80" r="180" fill="#1976D2" opacity="0.25"/>
-  <circle cx="80" cy="560" r="130" fill="#1976D2" opacity="0.2"/>
-  <circle cx="1150" cy="570" r="90" fill="#2196F3" opacity="0.15"/>
-  <rect x="0" y="0" width="1200" height="6" fill="#42A5F5"/>
-  <rect x="55" y="55" width="1090" height="455" rx="20" fill="url(#card)"/>
-  <rect x="55" y="55" width="7" height="455" rx="4" fill="#1976D2"/>
+    // Decorative circles
+    ctx.fillStyle = "rgba(25, 118, 210, 0.25)";
+    ctx.beginPath();
+    ctx.arc(1100, 80, 180, 0, Math.PI * 2);
+    ctx.fill();
 
-  <rect x="90" y="88" width="${topicBadgeW}" height="40" rx="20" fill="#1976D2"/>
-  <text x="110" y="114" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="bold" fill="white">${escapeXml(topicName)}</text>
+    ctx.fillStyle = "rgba(25, 118, 210, 0.2)";
+    ctx.beginPath();
+    ctx.arc(80, 560, 130, 0, Math.PI * 2);
+    ctx.fill();
 
-  <rect x="${diffBadgeX}" y="88" width="120" height="40" rx="20" fill="${diffColor}" opacity="0.15"/>
-  <text x="${diffBadgeX + 60}" y="114" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="bold" fill="${diffColor}" text-anchor="middle" dominant-baseline="middle">${difficulty.toUpperCase()}</text>
+    ctx.fillStyle = "rgba(33, 150, 243, 0.15)";
+    ctx.beginPath();
+    ctx.arc(1150, 570, 90, 0, Math.PI * 2);
+    ctx.fill();
 
-  <rect x="${marksBadgeX}" y="88" width="120" height="40" rx="20" fill="#E3F2FD"/>
-  <text x="${marksBadgeX + 60}" y="114" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="bold" fill="#1565C0" text-anchor="middle" dominant-baseline="middle">${marks} mark${marks !== 1 ? "s" : ""}</text>
+    // Top accent line
+    ctx.fillStyle = "#42A5F5";
+    ctx.fillRect(0, 0, W, 6);
 
-  <line x1="90" y1="148" x2="1110" y2="148" stroke="#1976D2" stroke-width="1.5" opacity="0.2"/>
+    // White card background
+    const cardGrad = ctx.createLinearGradient(0, 55, 0, 510);
+    cardGrad.addColorStop(0, "#ffffff");
+    cardGrad.addColorStop(1, "#E3F2FD");
+    ctx.fillStyle = cardGrad;
+    drawRoundedRect(ctx, 55, 55, 1090, 455, 20);
+    ctx.fill();
 
-  ${wrapText(cleanText, 90, 190, 1020, 34, "#1a1a2e", 5)}
+    // Left accent bar
+    ctx.fillStyle = "#1976D2";
+    drawRoundedRect(ctx, 55, 55, 7, 455, 4);
+    ctx.fill();
 
-  <rect x="55" y="510" width="1090" height="4" fill="#42A5F5"/>
-  <rect x="55" y="514" width="1090" height="96" rx="0" fill="#0D47A1"/>
-  <rect x="55" y="606" width="1090" height="4" rx="4" fill="#0D47A1"/>
+    // ── Badges ─────────────────────────────────────────────────
 
-  <text x="100" y="562" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="bold" fill="white">ZIM</text>
-  <text x="163" y="562" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="bold" fill="#64B5F6">MATHS</text>
-  <text x="100" y="590" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#90CAF9">.com</text>
+    // Topic badge
+    ctx.font = "bold 19px 'DejaVu Sans', sans-serif";
+    const topicTextW = ctx.measureText(topicName).width;
+    const topicBadgeW = topicTextW + 50;
+    ctx.fillStyle = "#1976D2";
+    drawRoundedRect(ctx, 90, 88, topicBadgeW, 40, 20);
+    ctx.fill();
+    ctx.fillStyle = "white";
+    ctx.fillText(topicName, 110, 114);
 
-  <line x1="270" y1="528" x2="270" y2="604" stroke="#42A5F5" stroke-width="1" opacity="0.4"/>
+    // Difficulty badge
+    const diffBadgeX = 90 + topicBadgeW + 20;
+    ctx.fillStyle = diffColor + "26"; // 15% opacity
+    drawRoundedRect(ctx, diffBadgeX, 88, 120, 40, 20);
+    ctx.fill();
+    ctx.font = "bold 17px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = diffColor;
+    ctx.textAlign = "center";
+    ctx.fillText(difficulty.toUpperCase(), diffBadgeX + 60, 114);
+    ctx.textAlign = "left";
 
-  <text x="300" y="558" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#BBDEFB">Zimbabwe's #1 Maths Platform</text>
-  <text x="300" y="590" font-family="DejaVu Sans, sans-serif" font-size="17" fill="#90CAF9">Practice - Learn - Excel</text>
+    // Marks badge
+    const marksBadgeX = diffBadgeX + 140;
+    ctx.fillStyle = "#E3F2FD";
+    drawRoundedRect(ctx, marksBadgeX, 88, 120, 40, 20);
+    ctx.fill();
+    ctx.font = "bold 17px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#1565C0";
+    ctx.textAlign = "center";
+    ctx.fillText(`${marks} mark${marks !== 1 ? "s" : ""}`, marksBadgeX + 60, 114);
+    ctx.textAlign = "left";
 
-  <rect x="930" y="530" width="195" height="54" rx="27" fill="#2196F3"/>
-  <text x="1027" y="557" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="bold" fill="white" text-anchor="middle">Visit Site</text>
-  <text x="1027" y="576" font-family="DejaVu Sans, sans-serif" font-size="13" fill="#BBDEFB" text-anchor="middle">zimmaths.com</text>
-</svg>`;
+    // Separator line
+    ctx.strokeStyle = "rgba(25, 118, 210, 0.2)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(90, 148);
+    ctx.lineTo(1110, 148);
+    ctx.stroke();
 
-    const sharp = (await import("sharp")).default;
-    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    // ── Question text ──────────────────────────────────────────
+    ctx.font = "34px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#1a1a2e";
+    wrapTextCanvas(ctx, cleanText, 90, 200, 1020, 46, 5);
+
+    // ── Footer ─────────────────────────────────────────────────
+    // Bottom accent
+    ctx.fillStyle = "#42A5F5";
+    ctx.fillRect(55, 510, 1090, 4);
+
+    // Footer background
+    ctx.fillStyle = "#0D47A1";
+    ctx.fillRect(55, 514, 1090, 96);
+
+    // Footer bottom accent
+    ctx.fillStyle = "#0D47A1";
+    drawRoundedRect(ctx, 55, 606, 1090, 4, 4);
+    ctx.fill();
+
+    // ZIMMATHS text
+    ctx.font = "bold 34px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "white";
+    ctx.fillText("ZIM", 100, 562);
+    ctx.fillStyle = "#64B5F6";
+    ctx.fillText("MATHS", 163, 562);
+    ctx.font = "17px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#90CAF9";
+    ctx.fillText(".com", 270, 562);
+
+    // Vertical separator
+    ctx.strokeStyle = "rgba(66, 165, 245, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(305, 528);
+    ctx.lineTo(305, 604);
+    ctx.stroke();
+
+    // Tagline
+    ctx.font = "20px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#BBDEFB";
+    ctx.fillText("Zimbabwe's #1 Maths Platform", 330, 558);
+    ctx.font = "17px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#90CAF9";
+    ctx.fillText("Practice - Learn - Excel", 330, 590);
+
+    // Visit site button
+    ctx.fillStyle = "#2196F3";
+    drawRoundedRect(ctx, 930, 530, 195, 54, 27);
+    ctx.fill();
+    ctx.font = "bold 18px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText("Visit Site", 1027, 557);
+    ctx.font = "13px 'DejaVu Sans', sans-serif";
+    ctx.fillStyle = "#BBDEFB";
+    ctx.fillText("zimmaths.com", 1027, 576);
+    ctx.textAlign = "left";
+
+    // ── Output ─────────────────────────────────────────────────
+    const pngBuffer = canvas.toBuffer("image/png");
 
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=3600");

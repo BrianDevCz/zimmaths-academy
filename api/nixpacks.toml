@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["...", "dejavu_fonts", "fontconfig"]
+nixPkgs = ["...", "dejavu_fonts", "fontconfig", "cairo", "pango", "libjpeg", "giflib", "pixman"]
 
 [start]
 cmd = "fc-cache -f 2>/dev/null; node dist/index.js"
