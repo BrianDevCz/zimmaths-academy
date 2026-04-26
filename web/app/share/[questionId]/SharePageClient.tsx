@@ -111,7 +111,7 @@ export default function SharePageClient({ questionId }: { questionId: string }) 
           </button>
         </div>
 
-        {/* Back link */}
+        {/* Back link l*/}
         <div className="text-center">
           {question.paperId ? (
             <Link href={`/papers/${question.paperId}/questions/${questionId}`}
