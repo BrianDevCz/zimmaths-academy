@@ -37,15 +37,14 @@ function latexToText(expr: string): string {
 // Strip LaTeX and section labels for display
 function stripLatex(text: string): string {
   return text
-    // Remove section labels
     .replace(/\[SECTION [A-Z]\]/gi, "")
     .replace(/\(section [a-z]\)/gi, "")
     .replace(/section [a-z]\s*:/gi, "")
-    // Convert display math $$...$$ to readable text FIRST
+    // Convert display math $$...$$ FIRST (before stripping)
     .replace(/\$\$([\s\S]*?)\$\$/g, (_, expr) => latexToText(expr))
-    // Convert inline math $...$ to readable text FIRST
+    // Convert inline math $...$ FIRST (before stripping)
     .replace(/\$([^$]+?)\$/g, (_, expr) => latexToText(expr))
-    // Convert remaining bare LaTeX (no delimiters)
+    // Handle any remaining bare LaTeX
     .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)")
     .replace(/\\sqrt\{([^}]*)\}/g, "√($1)")
     .replace(/\\times/g, "×")
@@ -84,7 +83,6 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-// Wrap text into SVG tspan elements — max 5 lines
 function wrapText(
   text: string, x: number, y: number,
   maxWidth: number, fontSize: number, color: string,
@@ -118,7 +116,7 @@ function wrapText(
     .join("\n  ");
 }
 
-// GET /api/share/:questionId — generate SVG share card
+// GET /api/share/:questionId — generate PNG share card
 router.get("/:questionId", async (req: Request, res: Response) => {
   try {
     const question = await prisma.question.findUnique({
@@ -140,7 +138,6 @@ router.get("/:questionId", async (req: Request, res: Response) => {
     const marks = question.marks;
     const diffColor = difficultyColor(difficulty);
 
-    // Topic badge width
     const topicBadgeW = topicName.length * 12 + 70;
     const diffBadgeX = topicBadgeW + 120;
     const marksBadgeX = diffBadgeX + 130;
@@ -205,7 +202,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
 
   <!-- Tagline -->
   <text x="300" y="558" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#BBDEFB">Zimbabwe's #1 Maths Platform</text>
-  <text x="300" y="590" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#90CAF9">Practice • Learn • Excel 🇿🇼</text>
+  <text x="300" y="590" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#90CAF9">Practice • Learn • Excel</text>
 
   <!-- CTA button -->
   <rect x="930" y="530" width="195" height="54" rx="27" fill="#2196F3"/>
@@ -213,9 +210,14 @@ router.get("/:questionId", async (req: Request, res: Response) => {
   <text x="1027" y="576" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#BBDEFB" text-anchor="middle">zimmaths.com</text>
 </svg>`;
 
-    res.setHeader("Content-Type", "image/svg+xml");
-    res.setHeader("Cache-Control", "no-cache");
-    res.send(svg);
+    // Convert SVG to PNG so WhatsApp/social can render it
+    const sharp = (await import("sharp")).default;
+    const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(pngBuffer);
+
   } catch (error) {
     console.error("Share card error:", error);
     res.status(500).json({ error: "Failed to generate share card" });
