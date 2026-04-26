@@ -1,2 +1,5 @@
 [phases.setup]
 nixPkgs = ["...", "dejavu_fonts", "fontconfig"]
+
+[start]
+cmd = "fc-cache -f 2>/dev/null; node dist/index.js"
