@@ -341,12 +341,14 @@ export default function DailyChallengePage() {
                   )}
                 </div>
                 <a href={
-                    "https://wa.me/?text=I just attempted today's ZimMaths Daily Challenge! Can you solve it? " +
-                    encodeURIComponent(questionText) + " Try it at zimmaths.com/daily"
+                    challenge?.question?.id
+                      ? `/share/${challenge.question.id}`
+                      : `https://wa.me/?text=${encodeURIComponent("I just attempted today's ZimMaths Daily Challenge! Try it at zimmaths.com/daily")}`
                   }
-                  target="_blank" rel="noopener noreferrer"
+                  target={challenge?.question?.id ? "_self" : "_blank"}
+                  rel="noopener noreferrer"
                   className="block text-center bg-green-500 hover:bg-green-400 text-white py-3 rounded-lg font-semibold transition">
-                  Share on WhatsApp
+                  📤 Share This Question
                 </a>
               </div>
             ) : (
@@ -382,12 +384,14 @@ export default function DailyChallengePage() {
                 </button>
 
                 <a href={
-                    "https://wa.me/?text=Can you solve today's ZimMaths Daily Challenge? " +
-                    encodeURIComponent(questionText) + " Try it at zimmaths.com/daily"
+                    challenge?.question?.id
+                      ? `/share/${challenge.question.id}`
+                      : `https://wa.me/?text=${encodeURIComponent("Can you solve today's ZimMaths Daily Challenge? Try it at zimmaths.com/daily")}`
                   }
-                  target="_blank" rel="noopener noreferrer"
+                  target={challenge?.question?.id ? "_self" : "_blank"}
+                  rel="noopener noreferrer"
                   className="block text-center border border-green-500 text-green-600 hover:bg-green-50 py-3 rounded-lg font-semibold transition">
-                  Share Challenge on WhatsApp
+                  📤 Share This Question
                 </a>
               </div>
             )}

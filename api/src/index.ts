@@ -16,6 +16,7 @@ import leaderboardRouter from "./routes/leaderboard";
 import subscriptionsRouter from "./routes/subscriptions";
 import bookmarksRouter from "./routes/bookmarks";
 import badgesRouter from "./routes/badges";
+import shareRouter from "./routes/share";
 
 dotenv.config();
 
@@ -142,6 +143,7 @@ app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/topics", topicsRouter);
 app.use("/api/papers", papersRouter);
 app.use("/api/daily", dailyRouter);
+app.use("/api/share", shareRouter);
 
 // Protected routes
 app.use("/api/admin", adminLimiter, requireAdmin, adminRouter);
