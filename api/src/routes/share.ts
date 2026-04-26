@@ -1,6 +1,10 @@
 import { Router, Request, Response } from "express";
 import { createCanvas, registerFont, CanvasRenderingContext2D } from "canvas";
 import prisma from "../lib/prisma";
+import path from "path";
+
+// Point fontconfig to our config file so canvas finds DejaVu fonts
+process.env.FONTCONFIG_FILE = path.resolve(__dirname, "../../fonts.conf");
 
 const router = Router();
 
