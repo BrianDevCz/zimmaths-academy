@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
               // Styles from self and Google Fonts
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
               // Images from self, data URIs, and our CDNs
-              "img-src 'self' data: blob: https://ucarecdn.com https://d9s36eq1lg.ucarecd.net https://i.ytimg.com",
+              "img-src 'self' data: blob: https://ucarecdn.com https://d9s36eq1lg.ucarecd.net https://i.ytimg.com https://zimmaths-academy-production.up.railway.app",
               // Fonts
               "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
               // Frames — YouTube, GeoGebra, Vimeo
