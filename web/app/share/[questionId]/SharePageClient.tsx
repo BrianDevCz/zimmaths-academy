@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/app/lib/api";
 import Link from "next/link";
+import MathContent from "@/app/components/MathContent";
 
 export default function SharePageClient({ questionId }: { questionId: string }) {
   const [question, setQuestion] = useState<any>(null);
@@ -58,23 +59,8 @@ export default function SharePageClient({ questionId }: { questionId: string }) 
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-brand-900 via-brand-900 to-gray-900">
-      {/* Top nav */}
-      <nav className="px-6 py-4 flex items-center justify-between max-w-4xl mx-auto">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl font-bold text-white">ZIM</span>
-          <span className="text-xl font-bold text-brand-300">MATHS</span>
-          <span className="text-xs text-brand-300">.com</span>
-        </Link>
-        <Link
-          href="/register"
-          className="bg-brand-500 hover:bg-brand-400 text-white px-5 py-2 rounded-lg font-semibold text-sm transition"
-        >
-          Join Free
-        </Link>
-      </nav>
-
       {/* Hero */}
-      <section className="px-6 pt-8 pb-12 text-center max-w-2xl mx-auto">
+      <section className="px-6 pt-16 pb-12 text-center max-w-2xl mx-auto">
         <p className="text-brand-400 text-sm font-semibold mb-3 uppercase tracking-widest">
           📨 Someone challenged you
         </p>
@@ -113,12 +99,11 @@ export default function SharePageClient({ questionId }: { questionId: string }) 
             )}
           </div>
 
-          {/* Question text */}
+          {/* Question text — rendered with KaTeX */}
           <div className="px-6 md:px-10 py-10">
-            <div
-              className="text-gray-800 text-lg leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: question.questionText || "" }}
-            />
+            <div className="text-gray-800 text-lg leading-relaxed">
+              <MathContent>{question.questionText || ""}</MathContent>
+            </div>
           </div>
 
           {/* Image if present */}
@@ -173,13 +158,6 @@ export default function SharePageClient({ questionId }: { questionId: string }) 
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="text-center pb-10">
-        <p className="text-brand-400 text-sm">
-          © 2026 ZimMaths Academy · Built for Zimbabwe's O-Level students
-        </p>
-      </footer>
     </main>
   );
 }
