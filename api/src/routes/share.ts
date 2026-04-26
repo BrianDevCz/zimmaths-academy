@@ -111,6 +111,20 @@ function wrapText(
     .join("\n  ");
 }
 
+// Debug endpoint — remove after testing
+router.get("/debug/fonts", async (req: Request, res: Response) => {
+  const { execSync } = require("child_process");
+  try {
+    const fcList = execSync("fc-list 2>&1 || echo 'fc-list not found'").toString();
+    const lsFonts = execSync("ls -R /usr/share/fonts/ 2>&1 || echo 'no /usr/share/fonts'").toString();
+    const nixFonts = execSync("find /nix/store -name '*.ttf' 2>/dev/null | grep -i dejavu | head -10 || echo 'no nix dejavu'").toString();
+    const fontconfig = execSync("fc-match 'DejaVu Sans' 2>&1 || echo 'fc-match not found'").toString();
+    res.json({ fcList: fcList.slice(0, 3000), lsFonts: lsFonts.slice(0, 1000), nixFonts, fontconfig });
+  } catch (e: any) {
+    res.json({ error: e.message });
+  }
+});
+
 router.get("/:questionId", async (req: Request, res: Response) => {
   try {
     const question = await prisma.question.findUnique({
