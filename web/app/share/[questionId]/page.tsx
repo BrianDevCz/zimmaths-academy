@@ -6,20 +6,19 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 export async function generateMetadata({
   params,
 }: {
-  params: { questionId: string };
+  params: Promise<{ questionId: string }>;
 }): Promise<Metadata> {
-  // Fetch question for title
+  const { questionId } = await params;
   try {
-    const res = await fetch(`${API_URL}/api/questions/${params.questionId}`, {
+    const res = await fetch(`${API_URL}/api/questions/${questionId}`, {
       cache: "no-store",
     });
     const data = await res.json();
     const q = data?.data;
     const topic = q?.topic?.name || "Maths";
     const title = `ZimMaths — ${topic} Question`;
-    const description = `Can you solve this ${topic} question? Practice ZIMSEC O-Level Maths at zimmaths.com`;
-    const imageUrl = `${API_URL}/api/share/${params.questionId}`;
-
+    const description = `Can you solve this ${topic} question? Practice at zimmaths.com`;
+    const imageUrl = `${API_URL}/api/share/${questionId}`;
     return {
       title,
       description,
@@ -27,7 +26,7 @@ export async function generateMetadata({
         title,
         description,
         images: [{ url: imageUrl, width: 1200, height: 630 }],
-        url: `https://zimmaths.com/share/${params.questionId}`,
+        url: `https://zimmaths.com/share/${questionId}`,
         siteName: "ZimMaths",
         type: "website",
       },
@@ -43,10 +42,11 @@ export async function generateMetadata({
   }
 }
 
-export default function SharePage({
+export default async function SharePage({
   params,
 }: {
-  params: { questionId: string };
+  params: Promise<{ questionId: string }>;
 }) {
-  return <SharePageClient questionId={params.questionId} />;
+  const { questionId } = await params;
+  return <SharePageClient questionId={questionId} />;
 }
