@@ -3,15 +3,50 @@ import prisma from "../lib/prisma";
 
 const router = Router();
 
+// Convert LaTeX expression to readable plain text
+function latexToText(expr: string): string {
+  return expr
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)")
+    .replace(/\\sqrt\{([^}]*)\}/g, "√($1)")
+    .replace(/\\sqrt/g, "√")
+    .replace(/\^2/g, "²")
+    .replace(/\^3/g, "³")
+    .replace(/\^\{([^}]+)\}/g, "^$1")
+    .replace(/\_\{([^}]+)\}/g, "_$1")
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\pm/g, "±")
+    .replace(/\\leq/g, "≤")
+    .replace(/\\geq/g, "≥")
+    .replace(/\\neq/g, "≠")
+    .replace(/\\approx/g, "≈")
+    .replace(/\\pi/g, "π")
+    .replace(/\\theta/g, "θ")
+    .replace(/\\alpha/g, "α")
+    .replace(/\\beta/g, "β")
+    .replace(/\\gamma/g, "γ")
+    .replace(/\\infty/g, "∞")
+    .replace(/\\left/g, "")
+    .replace(/\\right/g, "")
+    .replace(/\{/g, "")
+    .replace(/\}/g, "")
+    .replace(/\\/g, "")
+    .trim();
+}
+
 // Strip LaTeX and section labels for display
 function stripLatex(text: string): string {
   return text
+    // Remove section labels
     .replace(/\[SECTION [A-Z]\]/gi, "")
     .replace(/\(section [a-z]\)/gi, "")
     .replace(/section [a-z]\s*:/gi, "")
-    .replace(/\$\$[\s\S]*?\$\$/g, "")
-    .replace(/\$[^$]*?\$/g, "")
-    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
+    // Convert display math $$...$$ to readable text FIRST
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, expr) => latexToText(expr))
+    // Convert inline math $...$ to readable text FIRST
+    .replace(/\$([^$]+?)\$/g, (_, expr) => latexToText(expr))
+    // Convert remaining bare LaTeX (no delimiters)
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1)/($2)")
     .replace(/\\sqrt\{([^}]*)\}/g, "√($1)")
     .replace(/\\times/g, "×")
     .replace(/\\div/g, "÷")
@@ -66,7 +101,6 @@ function wrapText(
       currentLine = test;
     } else {
       if (currentLine) lines.push(currentLine);
-      // If single word is too long, truncate it
       currentLine = word.length > charsPerLine ? word.slice(0, charsPerLine - 3) + "..." : word;
     }
   }
@@ -170,7 +204,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
   <line x1="270" y1="528" x2="270" y2="604" stroke="#42A5F5" stroke-width="1" opacity="0.4"/>
 
   <!-- Tagline -->
-  <text x="300" y="558" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#BBDEFB">Zimbabwe's #1 ZIMSEC O-Level Maths Platform</text>
+  <text x="300" y="558" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#BBDEFB">Zimbabwe's #1 Maths Platform</text>
   <text x="300" y="590" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#90CAF9">Practice • Learn • Excel 🇿🇼</text>
 
   <!-- CTA button -->
@@ -180,7 +214,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
 </svg>`;
 
     res.setHeader("Content-Type", "image/svg+xml");
-    res.setHeader("Cache-Control", "no-cache"); // disable cache during testing
+    res.setHeader("Cache-Control", "no-cache");
     res.send(svg);
   } catch (error) {
     console.error("Share card error:", error);
