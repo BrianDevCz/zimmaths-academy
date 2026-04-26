@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
 import { AuthProvider } from "./context/AuthContext";
 import { SessionProvider } from "./components/SessionProvider";
+import LayoutWrapper from "./components/LayoutWrapper";
 import 'katex/dist/katex.min.css';
 
 const inter = Inter({ subsets: ["latin"] });
@@ -63,7 +62,6 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    // Add your Google Search Console verification code once you get it:
     google: "ranYDI8neuNhdSfgsDjGMdQZ-w5mPktpmgX6CVcL234",
   },
 };
@@ -88,9 +86,7 @@ export default function RootLayout({
       <body className={`${inter.className} bg-gray-50`}>
         <SessionProvider>
           <AuthProvider>
-            <Navbar />
-            <div className="min-h-screen">{children}</div>
-            <Footer />
+            <LayoutWrapper>{children}</LayoutWrapper>
           </AuthProvider>
         </SessionProvider>
       </body>
