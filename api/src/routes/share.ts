@@ -6,6 +6,8 @@ const router = Router();
 // Strip LaTeX for display
 function stripLatex(text: string): string {
   return text
+    .replace(/\[SECTION [A-Z]\]/gi, "")
+    .replace(/\[section [a-z]\]/gi, "")
     .replace(/\$\$[\s\S]*?\$\$/g, "")
     .replace(/\$[^$]*?\$/g, "")
     .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
@@ -108,7 +110,7 @@ router.get("/:questionId", async (req: Request, res: Response) => {
   <text x="${100 + topicName.length * 11 + 245}" y="120" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1565C0" text-anchor="middle" dominant-baseline="middle">${marks} mark${marks !== 1 ? "s" : ""}</text>
 
   <!-- "Can you solve this?" label -->
-  <text x="100" y="175" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#1565C0" opacity="0.7">Can you solve this ZIMSEC question?</text>
+  <text x="100" y="175" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#1565C0" opacity="0.7">Can you solve this Zimmaths question?</text>
 
   <!-- Divider -->
   <line x1="100" y1="192" x2="1100" y2="192" stroke="#1976D2" stroke-width="1.5" opacity="0.2"/>
