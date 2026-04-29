@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAuth } from "./context/AuthContext"; // adjust path if needed
+import { useAuth } from "./context/AuthContext";
 
 function TypewriterText() {
   const phrases = [
@@ -124,6 +124,26 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Referral Banner — only for logged-in users */}
+      {isLoggedIn && (
+        <section className="bg-brand-50 border-b border-brand-100">
+          <div className="max-w-xl mx-auto px-4 py-4">
+            <a href="/referrals" className="flex items-center justify-between bg-white rounded-xl p-4 border border-brand-200 hover:border-brand-400 hover:shadow-md transition group">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                  🎁
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-800 text-sm">Refer friends & earn free Premium</p>
+                  <p className="text-xs text-gray-500">Get 1 month free when 5 friends upgrade</p>
+                </div>
+              </div>
+              <span className="text-brand-600 group-hover:translate-x-1 transition-transform text-lg">→</span>
+            </a>
+          </div>
+        </section>
+      )}
 
       {/* Stats Bar */}
       <section className="bg-brand-900 text-white py-6 px-6">

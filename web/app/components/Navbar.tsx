@@ -23,7 +23,6 @@ export default function Navbar() {
     { href: "/practice", label: "Practice" },
     { href: "/daily", label: "Daily Challenge" },
     { href: "/leaderboard", label: "Leaderboard" },
-    { href: "/referrals", label: "🎁 Refer & Earn" },
     { href: "/ai-tutor", label: "AI Tutor" },
     { href: "/search", label: "🔍 Search" },
   ];
@@ -84,16 +83,19 @@ export default function Navbar() {
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
                   <a href="/dashboard" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-                    📊 My Dashboard
+                    📊 Dashboard
                   </a>
                   <a href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-                    👤 My Profile
+                    👤 Profile
                   </a>
                   <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-                    📌 My Bookmarks
+                    📌 Bookmarks
                   </a>
                   <a href="/badges" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-                    🏅 My Badges
+                    🏅 Badges
+                  </a>
+                  <a href="/referrals" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
+                    🎁 Refer & Earn
                   </a>
                   {!isPremium && (
                     <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
@@ -166,16 +168,19 @@ export default function Navbar() {
             <p className="text-xs text-gray-500">{user.email}</p>
           </div>
           <a href="/dashboard" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-            📊 My Dashboard
+            📊 Dashboard
           </a>
           <a href="/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-            👤 My Profile
+            👤 Profile
           </a>
           <a href="/bookmarks" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-            📌 My Bookmarks
+            📌 Bookmarks
           </a>
           <a href="/badges" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-brand-50 transition">
-            🏅 My Badges
+            🏅 Badges
+          </a>
+          <a href="/referrals" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">
+            🎁 Refer & Earn
           </a>
           {!isPremium && (
             <a href="/upgrade" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-brand-700 font-semibold hover:bg-brand-50 transition">

@@ -98,6 +98,7 @@ export default function Footer() {
               <>
                 <li><a href="/profile" className="hover:text-white transition">My Profile</a></li>
                 <li><a href="/dashboard" className="hover:text-white transition">Dashboard</a></li>
+                <li><a href="/referrals" className="hover:text-white transition">🎁 Refer & Earn</a></li>
                 {!isPremium && (
                   <li><a href="/upgrade" className="hover:text-white transition">Upgrade to Premium</a></li>
                 )}
