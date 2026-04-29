@@ -23,6 +23,7 @@ export default function Navbar() {
     { href: "/practice", label: "Practice" },
     { href: "/daily", label: "Daily Challenge" },
     { href: "/leaderboard", label: "Leaderboard" },
+    { href: "/referrals", label: "🎁 Refer & Earn" },
     { href: "/ai-tutor", label: "AI Tutor" },
     { href: "/search", label: "🔍 Search" },
   ];

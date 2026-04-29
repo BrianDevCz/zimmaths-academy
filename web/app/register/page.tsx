@@ -6,7 +6,7 @@ import { API_URL } from "@/app/lib/api";
 
 function RegisterForm() {
   const searchParams = useSearchParams();
-  const refCode = searchParams.get("ref") || "";
+  const urlRefCode = searchParams.get("ref") || "";
 
   const [formData, setFormData] = useState({
     name: "",
@@ -14,34 +14,77 @@ function RegisterForm() {
     grade: "",
     password: "",
     confirmPassword: "",
+    referralCode: "",
   });
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [registered, setRegistered] = useState(false);
   const [referrerName, setReferrerName] = useState("");
+  const [validatingCode, setValidatingCode] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [codeTouched, setCodeTouched] = useState(false);
 
-  // Validate referral code on mount
+  // Auto-fill referral code from URL
   useEffect(() => {
-    if (refCode) {
-      fetch(`${API_URL}/api/referrals/validate/${refCode}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.success) setReferrerName(data.data.referrerName);
-        })
-        .catch(() => {});
+    if (urlRefCode) {
+      setFormData((prev) => ({ ...prev, referralCode: urlRefCode }));
+      validateReferralCode(urlRefCode);
     }
-  }, [refCode]);
+  }, [urlRefCode]);
+
+  const validateReferralCode = async (code: string) => {
+    if (!code || code.trim().length < 4) {
+      setReferrerName("");
+      setCodeError("");
+      return;
+    }
+
+    setValidatingCode(true);
+    setCodeError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/referrals/validate/${code.trim()}`);
+      const data = await res.json();
+      if (data.success) {
+        setReferrerName(data.data.referrerName);
+        setCodeError("");
+      } else {
+        setReferrerName("");
+        setCodeError("Invalid referral code. Check and try again.");
+      }
+    } catch {
+      // Don't block registration if validation fails — just clear the referrer
+      setReferrerName("");
+    } finally {
+      setValidatingCode(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    // Validate referral code when user types
+    if (name === "referralCode") {
+      setCodeTouched(true);
+      const trimmed = value.trim();
+      if (trimmed.length >= 4) {
+        // Debounce: only validate after user stops typing
+        const timer = setTimeout(() => validateReferralCode(trimmed), 500);
+        return () => clearTimeout(timer);
+      } else {
+        setReferrerName("");
+        setCodeError("");
+      }
+    }
   };
 
   const handleGoogleSignUp = async () => {
     setGoogleLoading(true);
-    // Pass referral code through callback URL so it can be captured after OAuth
-    const callbackUrl = refCode
-      ? `/auth/google-callback?redirect=/dashboard&ref=${refCode}`
+    const finalRefCode = formData.referralCode || urlRefCode;
+    const callbackUrl = finalRefCode
+      ? `/auth/google-callback?redirect=/dashboard&ref=${finalRefCode}`
       : "/auth/google-callback?redirect=/dashboard";
     await signIn("google", { callbackUrl });
   };
@@ -64,6 +107,12 @@ function RegisterForm() {
       return;
     }
 
+    // If there's a code error, warn but don't block
+    if (codeError && formData.referralCode.trim()) {
+      setError("Please fix the referral code or remove it before continuing.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -75,7 +124,7 @@ function RegisterForm() {
           email: formData.email,
           password: formData.password,
           grade: formData.grade,
-          referralCode: refCode || undefined,
+          referralCode: formData.referralCode.trim() || undefined,
         }),
       });
 
@@ -124,10 +173,10 @@ function RegisterForm() {
             <p className="text-gray-500">Join thousands of Zimbabwe students passing maths</p>
           </div>
 
-          {/* Referral Banner */}
+          {/* Referral Banner — shows when valid code is entered */}
           {referrerName && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-5 text-sm text-center">
-              🎁 <strong>{referrerName}</strong> invited you to ZimMaths!
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-5 text-sm text-center animate-fade-in">
+              🎁 <strong>{referrerName}</strong> invited you to ZimMaths! They'll earn rewards when you upgrade.
             </div>
           )}
 
@@ -182,6 +231,46 @@ function RegisterForm() {
                 <option value="form3">Form 3</option>
                 <option value="form4">Form 4</option>
               </select>
+            </div>
+
+            {/* Referral Code Field — NEW */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Referral Code <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  name="referralCode"
+                  value={formData.referralCode}
+                  onChange={handleChange}
+                  placeholder="Enter a friend's referral code"
+                  className={`w-full border rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:ring-1 transition ${
+                    referrerName
+                      ? "border-green-400 focus:border-green-500 focus:ring-green-500 bg-green-50"
+                      : codeError && codeTouched
+                      ? "border-red-300 focus:border-red-500 focus:ring-red-500"
+                      : "border-gray-300 focus:border-brand-500 focus:ring-brand-500"
+                  }`}
+                />
+                {validatingCode && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {referrerName && !validatingCode && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-lg">✓</div>
+                )}
+              </div>
+              {referrerName && !validatingCode && (
+                <p className="text-green-600 text-xs mt-1.5">✅ Referral by <strong>{referrerName}</strong></p>
+              )}
+              {codeError && codeTouched && (
+                <p className="text-red-500 text-xs mt-1.5">⚠️ {codeError}</p>
+              )}
+              {!referrerName && !codeError && formData.referralCode.trim() && codeTouched && !validatingCode && (
+                <p className="text-gray-400 text-xs mt-1.5">Leave blank if you don't have a referral code</p>
+              )}
             </div>
 
             <div>

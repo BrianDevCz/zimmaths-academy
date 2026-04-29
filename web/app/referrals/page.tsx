@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/app/lib/api";
+import { useAuth } from "@/app/context/AuthContext";
 import Link from "next/link";
 
 interface ReferralData {
@@ -26,24 +27,39 @@ interface ReferralData {
 }
 
 export default function ReferralsPage() {
+  const { token, user, loading: authLoading } = useAuth();
   const [data, setData] = useState<ReferralData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchReferralData();
-  }, []);
+    if (!authLoading && token) {
+      fetchReferralData();
+    } else if (!authLoading && !token) {
+      setLoading(false);
+    }
+  }, [authLoading, token]);
 
   const fetchReferralData = async () => {
     try {
-      const token = localStorage.getItem("token");
+      setError(null);
       const res = await fetch(`${API_URL}/api/referrals/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        setError("Please log in to view your referrals");
+        return;
+      }
       const json = await res.json();
-      if (json.success) setData(json.data);
+      if (json.success) {
+        setData(json.data);
+      } else {
+        setError(json.error || "Failed to load referral data");
+      }
     } catch (err) {
+      setError("Network error. Please try again.");
       console.error("Failed to load referral data:", err);
     } finally {
       setLoading(false);
@@ -57,14 +73,20 @@ export default function ReferralsPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      // fallback
+      // Fallback: select the text manually
+      const input = document.getElementById("referral-link-input") as HTMLInputElement;
+      if (input) {
+        input.select();
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }
     }
   };
 
   const handleClaim = async (tierId: string) => {
     setClaiming(tierId);
     try {
-      const token = localStorage.getItem("token");
       const res = await fetch(`${API_URL}/api/referrals/claim`, {
         method: "POST",
         headers: {
@@ -76,12 +98,12 @@ export default function ReferralsPage() {
       const json = await res.json();
       if (json.success) {
         alert(json.data.message);
-        fetchReferralData(); // Refresh
+        await fetchReferralData();
       } else {
-        alert(json.error || "Failed to claim");
+        alert(json.error || "Failed to claim reward");
       }
     } catch {
-      alert("Something went wrong");
+      alert("Network error. Please try again.");
     } finally {
       setClaiming(null);
     }
@@ -103,7 +125,8 @@ export default function ReferralsPage() {
     return `${Math.floor(days / 30)} month${Math.floor(days / 30) > 1 ? "s" : ""} ago`;
   };
 
-  if (loading) {
+  // Loading state
+  if (authLoading || loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
@@ -111,16 +134,44 @@ export default function ReferralsPage() {
     );
   }
 
-  if (!data) {
+  // Not logged in
+  if (!token) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500 mb-4">Please log in to view your referrals</p>
-          <Link href="/login" className="text-brand-700 hover:underline">Log In</Link>
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-4">🔒</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Login Required</h2>
+          <p className="text-gray-500 mb-6">Please log in to view your referrals and start earning rewards.</p>
+          <Link
+            href="/login"
+            className="inline-block bg-brand-700 hover:bg-brand-600 text-white px-6 py-3 rounded-xl font-semibold transition"
+          >
+            Log In
+          </Link>
         </div>
       </main>
     );
   }
+
+  // Error state
+  if (error) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-4">⚠️</div>
+          <p className="text-gray-500 mb-6">{error}</p>
+          <button
+            onClick={fetchReferralData}
+            className="text-brand-700 hover:underline text-sm font-medium"
+          >
+            Try Again
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!data) return null;
 
   const firstTier = data.rewardTiers[0];
   const progress = Math.min((data.paidReferrals / firstTier.threshold) * 100, 100);
@@ -148,7 +199,7 @@ export default function ReferralsPage() {
         <div className="bg-white rounded-2xl p-6 shadow border border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <p className="text-sm text-gray-500 mb-1">Paid referrals</p>
+              <p className="text-sm text-gray-500 mb-1">Paying referrals</p>
               <p className="text-4xl font-extrabold text-gray-900">
                 {data.paidReferrals}<span className="text-xl font-normal text-gray-400">/{firstTier.threshold}</span>
               </p>
@@ -172,7 +223,6 @@ export default function ReferralsPage() {
               : "You've earned 1 month of Premium! Claim it below."}
           </p>
 
-          {/* Progress dots */}
           <div className="flex justify-center gap-2 mt-4">
             {Array.from({ length: firstTier.threshold }).map((_, i) => (
               <div
@@ -195,6 +245,7 @@ export default function ReferralsPage() {
 
           <div className="flex gap-2 mb-4">
             <input
+              id="referral-link-input"
               readOnly
               value={data.referralLink}
               className="flex-1 px-3 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-700 focus:outline-none"
