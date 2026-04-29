@@ -2,6 +2,7 @@ import { Router, Response, Request } from "express";
 import { AuthRequest } from "../middleware/auth";
 import { z } from "zod";
 import prisma from "../lib/prisma";
+import { markReferralAsPaid } from "./referralHelpers";
 const { Paynow } = require("paynow");
 
 const router = Router();
@@ -63,6 +64,10 @@ async function activateSubscription(id: string, userId: string) {
     where: { id },
     data: { status: "active" },
   });
+
+  // Mark referral as paid if this user was referred by someone
+  await markReferralAsPaid(userId);
+
   console.log(`✅ Subscription activated for user ${userId}`);
 }
 

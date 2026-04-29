@@ -17,6 +17,7 @@ import subscriptionsRouter from "./routes/subscriptions";
 import bookmarksRouter from "./routes/bookmarks";
 import badgesRouter from "./routes/badges";
 import shareRouter from "./routes/share";
+import referralsRouter from "./routes/referrals";
 
 dotenv.config();
 
@@ -156,6 +157,7 @@ app.use("/api/subscriptions/initiate-paynow", paymentLimiter);
 app.use("/api/subscriptions", requireAuth, subscriptionsRouter);
 app.use("/api/bookmarks", requireAuth, bookmarksRouter);
 app.use("/api/badges", requireAuth, badgesRouter);
+app.use("/api/referrals", requireAuth, referralsRouter);
 
 // Health check
 app.get("/api/health", (req, res) => {

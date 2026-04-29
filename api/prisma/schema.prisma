@@ -25,10 +25,15 @@ model User {
   resetToken             String?
   resetTokenExp          DateTime?
   role                   String                  @default("student")
+  referralCode           String                  @unique @default(uuid())
+  referredBy             String?
   aiChatUsage            AiChatUsage[]
   bookmarks              Bookmark[]
   dailyChallengeAttempts DailyChallengeAttempt[]
   practiceTests          PracticeTest[]
+  referralsMade          Referral[]              @relation("Referrer")
+  referredThrough        Referral?               @relation("Referred")
+  referralRewards        ReferralReward[]
   subscription           Subscription?
   badges                 UserBadge[]
   lessonProgress         UserLessonProgress[]
@@ -37,6 +42,35 @@ model User {
   @@index([email])
   @@index([createdAt])
   @@index([role])
+  @@index([referralCode])
+}
+
+model Referral {
+  id          String    @id @default(uuid())
+  referrerId  String
+  referredId  String    @unique
+  status      String    @default("registered") // registered | paid
+  createdAt   DateTime  @default(now())
+  convertedAt DateTime? // when referred user upgraded to premium
+  referrer    User      @relation("Referrer", fields: [referrerId], references: [id])
+  referred    User      @relation("Referred", fields: [referredId], references: [id])
+
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([status])
+}
+
+model ReferralReward {
+  id             String   @id @default(uuid())
+  userId         String
+  tier           String   // tier_5 | tier_10 | tier_30
+  paidReferrals  Int
+  rewardMonths   Int      // 1, 3, or 12
+  claimedAt      DateTime @default(now())
+  applied        Boolean  @default(false)
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Subscription {

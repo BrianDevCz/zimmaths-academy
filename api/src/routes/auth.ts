@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../email";
 import { checkBadgesAfterLogin } from "../badges";
 import { awardPoints } from "../points";
+import { createUniqueReferralCode, recordReferral } from "./referralHelpers";
 
 const router = Router();
 
@@ -68,6 +69,7 @@ router.post("/register", async (req: Request, res: Response) => {
       email: z.string().email(),
       password: z.string().min(6).max(100),
       grade: z.string().optional(),
+      referralCode: z.string().optional(),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -78,7 +80,7 @@ router.post("/register", async (req: Request, res: Response) => {
       });
     }
 
-    const { name, email, password, grade } = parsed.data;
+    const { name, email, password, grade, referralCode: refCode } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -92,7 +94,9 @@ router.post("/register", async (req: Request, res: Response) => {
     const verifyToken = crypto.randomBytes(32).toString("hex");
     const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await prisma.user.create({
+    const referralCode = await createUniqueReferralCode(name);
+
+    const newUser = await prisma.user.create({
       data: {
         name,
         email,
@@ -101,8 +105,14 @@ router.post("/register", async (req: Request, res: Response) => {
         emailVerified: false,
         verifyToken,
         verifyTokenExp,
+        referralCode,
       },
     });
+
+    // Record referral if user came via a referral link
+    if (refCode) {
+      await recordReferral(newUser.id, refCode);
+    }
 
     console.log(`Sending verification email to: ${email}`);
     const emailSent = await sendVerificationEmail(email, name, verifyToken);
@@ -379,6 +389,8 @@ router.post("/google", async (req: Request, res: Response) => {
     let user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
+      const referralCode = await createUniqueReferralCode(name || email.split("@")[0]);
+
       user = await prisma.user.create({
         data: {
           name: name || email.split("@")[0],
@@ -386,6 +398,7 @@ router.post("/google", async (req: Request, res: Response) => {
           passwordHash: googleId,
           emailVerified: true,
           grade: null,
+          referralCode,
         },
       });
     } else if (!user.emailVerified) {

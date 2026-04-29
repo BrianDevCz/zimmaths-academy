@@ -1,9 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { API_URL } from "@/app/lib/api";
 
-export default function RegisterPage() {
+function RegisterForm() {
+  const searchParams = useSearchParams();
+  const refCode = searchParams.get("ref") || "";
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -15,6 +19,19 @@ export default function RegisterPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [registered, setRegistered] = useState(false);
+  const [referrerName, setReferrerName] = useState("");
+
+  // Validate referral code on mount
+  useEffect(() => {
+    if (refCode) {
+      fetch(`${API_URL}/api/referrals/validate/${refCode}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success) setReferrerName(data.data.referrerName);
+        })
+        .catch(() => {});
+    }
+  }, [refCode]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,7 +39,11 @@ export default function RegisterPage() {
 
   const handleGoogleSignUp = async () => {
     setGoogleLoading(true);
-    await signIn("google", { callbackUrl: "/auth/google-callback?redirect=/dashboard" });
+    // Pass referral code through callback URL so it can be captured after OAuth
+    const callbackUrl = refCode
+      ? `/auth/google-callback?redirect=/dashboard&ref=${refCode}`
+      : "/auth/google-callback?redirect=/dashboard";
+    await signIn("google", { callbackUrl });
   };
 
   const handleSubmit = async () => {
@@ -54,6 +75,7 @@ export default function RegisterPage() {
           email: formData.email,
           password: formData.password,
           grade: formData.grade,
+          referralCode: refCode || undefined,
         }),
       });
 
@@ -101,6 +123,13 @@ export default function RegisterPage() {
             <h1 className="text-3xl font-bold text-brand-800 mb-2">Create Your Account</h1>
             <p className="text-gray-500">Join thousands of Zimbabwe students passing maths</p>
           </div>
+
+          {/* Referral Banner */}
+          {referrerName && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-5 text-sm text-center">
+              🎁 <strong>{referrerName}</strong> invited you to ZimMaths!
+            </div>
+          )}
 
           {/* Google Sign Up */}
           <button
@@ -184,5 +213,17 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-brand-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      </main>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
