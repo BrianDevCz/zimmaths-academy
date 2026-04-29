@@ -109,9 +109,12 @@ router.post("/register", async (req: Request, res: Response) => {
       },
     });
 
-    // Record referral if user came via a referral link
+    // Store referral code — referral will be recorded after email verification
     if (refCode) {
-      await recordReferral(newUser.id, refCode);
+      await prisma.user.update({
+        where: { id: newUser.id },
+        data: { referredBy: refCode },
+      });
     }
 
     console.log(`Sending verification email to: ${email}`);
@@ -148,6 +151,11 @@ router.get("/verify-email", async (req: Request, res: Response) => {
       where: { id: user.id },
       data: { emailVerified: true, verifyToken: null, verifyTokenExp: null },
     });
+
+    // Record referral now that email is verified
+    if (user.referredBy) {
+      await recordReferral(user.id, user.referredBy);
+    }
 
     return res.redirect(`${process.env.APP_URL}/login?verified=true`);
   } catch (error) {
