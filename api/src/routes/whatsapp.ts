@@ -5,12 +5,19 @@ const router = Router();
 
 // DeepSeek API helper
 async function generateWithAI(prompt: string): Promise<string> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  
+  if (!apiKey) {
+    console.error("DEEPSEEK_API_KEY not set");
+    return "";
+  }
+
   try {
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: "deepseek-chat",
@@ -26,10 +33,19 @@ async function generateWithAI(prompt: string): Promise<string> {
       }),
     });
 
+    console.log("DeepSeek response status:", response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("DeepSeek error body:", errorText);
+      return "";
+    }
+
     const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+    console.log("DeepSeek response:", JSON.stringify(data).slice(0, 200));
     return data.choices?.[0]?.message?.content || "";
   } catch (error) {
-    console.error("DeepSeek API error:", error);
+    console.error("DeepSeek fetch error:", error);
     return "";
   }
 }
@@ -105,9 +121,6 @@ router.get("/generate", async (req: Request, res: Response) => {
         const cleanQuestion = stripLatex(question.questionText);
         const cleanAnswer = stripLatex(question.correctAnswer || "");
         const topicName = question.topic?.name || "Maths";
-        const paperInfo = question.paper
-          ? `${question.paper.title} (${question.paper.year} ${question.paper.session})`
-          : "Practice Paper";
         const diffLabel = question.difficulty === "easy" ? "Quick one" : question.difficulty === "medium" ? "Medium" : "Tricky";
 
         prompt = `Create a short, engaging WhatsApp post for ZimMaths Academy. The audience is Zimbabwean O-Level students.
@@ -117,7 +130,6 @@ CONTEXT:
 - Question: "${cleanQuestion}"
 - Answer: "${cleanAnswer || 'N/A'}"
 - Difficulty: ${diffLabel} (${question.marks} marks)
-- Source: ${paperInfo}
 
 YOUR TASK:
 Write a post that follows this EXACT format:
@@ -148,7 +160,6 @@ RULES:
 
       // ── EXAM TIP POST ──────────────────────────────────
       case "tip": {
-        // Get topics to make tips relevant
         const topicList = await prisma.topic.findMany({ select: { name: true }, take: 5 });
         const topics = topicList.map(t => t.name).join(", ");
 
@@ -203,7 +214,6 @@ Pick something fresh and genuinely interesting.`;
 
       // ── MOTIVATION POST ────────────────────────────────
       case "motivation": {
-        // Get real stats to include
         const totalUsers = await prisma.user.count();
         const totalTests = await prisma.practiceTest.count();
         const totalPoints = await prisma.userPoint.aggregate({ _sum: { points: true } });
@@ -278,6 +288,13 @@ REQUIREMENTS:
 
       default:
         return res.json({ success: false, error: "Invalid content type. Use: question, tip, fact, motivation, or leaderboard" });
+    }
+
+    if (!postContent) {
+      return res.json({
+        success: false,
+        error: "AI generation failed. Please check that DEEPSEEK_API_KEY is set and has available credits."
+      });
     }
 
     // Save to history
