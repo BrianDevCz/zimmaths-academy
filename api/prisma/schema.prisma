@@ -275,3 +275,12 @@ model AiChatUsage {
   @@index([userId])
   @@index([date])
 }
+
+model WhatsAppPost {
+  id          String   @id @default(uuid())
+  content     String
+  contentType String   // question, tip, fact, motivation, leaderboard
+  postedAt    DateTime @default(now())
+  posted      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

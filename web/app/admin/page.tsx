@@ -55,6 +55,13 @@ export default function AdminPage() {
   const [selectedPaperId, setSelectedPaperId] = useState<string>("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // WhatsApp state
+  const [whatsappGenerated, setWhatsappGenerated] = useState<{ id: string; content: string; type: string } | null>(null);
+  const [whatsappType, setWhatsappType] = useState("question");
+  const [whatsappHistory, setWhatsappHistory] = useState<any[]>([]);
+  const [whatsappGenerating, setWhatsappGenerating] = useState(false);
+  const [whatsappCopied, setWhatsappCopied] = useState(false);
+
   // Daily challenge form
   const [challengeForm, setChallengeForm] = useState({ questionId: "", date: "" });
 
@@ -99,6 +106,7 @@ export default function AdminPage() {
     if (activeTab === "daily") { fetchDailyChallenges(); fetchEligibleQuestions(); }
     if (activeTab === "badges") fetchBadgeStats();
     if (activeTab === "analytics") fetchAnalytics();
+    if (activeTab === "whatsapp") fetchWhatsappHistory();
   }, [activeTab, token, selectedPaperId]);
 
   const fetchStats = async () => {
@@ -208,6 +216,49 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) setAnalytics(data.data);
     } catch { setError("Failed to load analytics."); }
+  };
+
+  const fetchWhatsappHistory = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/whatsapp/history`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) setWhatsappHistory(data.data);
+    } catch {}
+  };
+
+  const handleGenerateWhatsapp = async () => {
+    setWhatsappGenerating(true);
+    setWhatsappCopied(false);
+    setFormError("");
+    try {
+      const res = await fetch(`${API_URL}/api/admin/whatsapp/generate?type=${whatsappType}`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setWhatsappGenerated({ id: data.data.id, content: data.data.content, type: data.data.type });
+      } else {
+        setFormError(data.error || "Failed to generate");
+      }
+    } catch {
+      setFormError("Failed to generate post");
+    } finally {
+      setWhatsappGenerating(false);
+    }
+  };
+
+  const handleCopyWhatsapp = async () => {
+    if (!whatsappGenerated) return;
+    await navigator.clipboard.writeText(whatsappGenerated.content);
+    setWhatsappCopied(true);
+    setTimeout(() => setWhatsappCopied(false), 2500);
+    
+    try {
+      await fetch(`${API_URL}/api/admin/whatsapp/post`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ id: whatsappGenerated.id }),
+      });
+      fetchWhatsappHistory();
+    } catch {}
   };
 
   const handleScheduleChallenge = async () => {
@@ -444,7 +495,7 @@ export default function AdminPage() {
   const downloadTemplate = () => {
     const csv = [
       "topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle",
-      'general-arithmetic,1,"Simplify $\\frac{3}{4} + \\frac{1}{2}$",2,easy,"$\\frac{5}{4}$","Convert to common denominator",true,true,,',
+      'general-arithmetic,1,"Simplify $\frac{3}{4} + \frac{1}{2}$",2,easy,"$\frac{5}{4}$","Convert to common denominator",true,true,,',
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -507,6 +558,7 @@ export default function AdminPage() {
     { id: "users", label: "👥 Users" },
     { id: "subscriptions", label: "💳 Subscriptions" },
     { id: "badges", label: "🏅 Badges" },
+    { id: "whatsapp", label: "📱 WhatsApp" },
   ];
 
   if (loading && activeTab === "stats") {
@@ -611,7 +663,6 @@ export default function AdminPage() {
               </div>
             ) : (
               <>
-                {/* 30-day summary cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   {[
                     { label: "New Users (30d)", value: analytics.summary.totalNewUsers, icon: "👥", color: "text-blue-600" },
@@ -628,7 +679,6 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                {/* Registrations chart */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">👥 New Registrations — Last 30 Days</h2>
                   <div className="flex items-end gap-1 h-32">
@@ -655,7 +705,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Revenue chart */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">💰 Daily Revenue — Last 30 Days</h2>
                   <div className="flex items-end gap-1 h-32">
@@ -682,7 +731,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Practice tests chart */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice Tests — Last 30 Days</h2>
                   <div className="flex items-end gap-1 h-32">
@@ -710,7 +758,6 @@ export default function AdminPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Topic popularity */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                     <h2 className="text-lg font-bold text-gray-800 mb-4">🔥 Most Practiced Topics</h2>
                     {analytics.topicStats.length === 0 ? (
@@ -736,7 +783,6 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  {/* Plan breakdown */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                     <h2 className="text-lg font-bold text-gray-800 mb-4">⭐ Active Subscription Plans</h2>
                     {analytics.planBreakdown.length === 0 ? (
@@ -769,7 +815,6 @@ export default function AdminPage() {
         {/* DAILY CHALLENGES TAB */}
         {activeTab === "daily" && (
           <div className="space-y-6">
-            {/* Schedule form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">📅 Schedule a Daily Challenge</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -805,7 +850,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Scheduled challenges list */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">
                 📋 Scheduled Challenges ({dailyChallenges.length})
@@ -1001,7 +1045,6 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Add / Edit Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">{editingQuestionId ? "✏️ Edit Question" : "➕ Add New Question"}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1125,7 +1168,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Paper Questions */}
             {questions.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4">📄 Paper Questions ({questions.length})</h2>
@@ -1154,7 +1196,6 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Practice-Only Questions */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice-Only Questions ({practiceQuestions.length})</h2>
               {practiceQuestions.length === 0 ? (
@@ -1365,7 +1406,6 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-            {/* Pagination */}
             {userTotalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                 <p className="text-sm text-gray-500">
@@ -1481,6 +1521,189 @@ export default function AdminPage() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* WHATSAPP TAB */}
+        {activeTab === "whatsapp" && (
+          <div className="space-y-6">
+            {/* Generator */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-1">📱 Generate WhatsApp Channel Post</h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Generate a post for your WhatsApp Channel. Review, copy, and paste into WhatsApp.
+              </p>
+
+              {/* Content Type Selector */}
+              <div className="flex flex-wrap gap-3 mb-6">
+                {[
+                  { id: "question", emoji: "📐", label: "Can You Solve?" },
+                  { id: "tip", emoji: "💡", label: "Exam Tip" },
+                  { id: "fact", emoji: "🔍", label: "Did You Know?" },
+                  { id: "motivation", emoji: "📅", label: "Motivation" },
+                  { id: "leaderboard", emoji: "🏆", label: "Leaderboard" },
+                ].map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => { setWhatsappType(type.id); setWhatsappGenerated(null); }}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition border ${
+                      whatsappType === type.id
+                        ? "bg-brand-700 text-white border-brand-700"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-brand-300"
+                    }`}
+                  >
+                    {type.emoji} {type.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleGenerateWhatsapp}
+                disabled={whatsappGenerating}
+                className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-3 rounded-xl font-semibold text-sm transition flex items-center gap-2"
+              >
+                {whatsappGenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>🤖 Generate Post</>
+                )}
+              </button>
+
+              {/* Generated Post */}
+              {whatsappGenerated && (
+                <div className="mt-6 p-6 bg-green-50 rounded-2xl border border-green-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-green-800 flex items-center gap-2">
+                      ✅ Post Generated
+                    </span>
+                    <button
+                      onClick={handleGenerateWhatsapp}
+                      className="text-brand-600 hover:text-brand-800 text-sm font-semibold"
+                    >
+                      🔄 Regenerate
+                    </button>
+                  </div>
+
+                  {/* Preview card — simulates WhatsApp Channel look */}
+                  <div className="bg-[#0b141a] rounded-xl p-5 mb-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        ZM
+                      </div>
+                      <div>
+                        <p className="text-[#06cf9c] font-semibold text-sm">ZimMaths Academy 📚</p>
+                        <p className="text-gray-400 text-xs">Just now</p>
+                      </div>
+                    </div>
+                    <div className="text-white text-sm whitespace-pre-wrap leading-relaxed">
+                      {whatsappGenerated.content}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleCopyWhatsapp}
+                    className={`w-full py-3 rounded-xl font-bold text-sm transition ${
+                      whatsappCopied
+                        ? "bg-green-600 text-white"
+                        : "bg-[#25D366] hover:bg-[#20bd5a] text-white"
+                    }`}
+                  >
+                    {whatsappCopied ? "✅ Copied! Paste in WhatsApp Channel" : "📋 Copy & Open WhatsApp Channel"}
+                  </button>
+                  <p className="text-xs text-gray-400 text-center mt-2">
+                    After copying, paste directly into your WhatsApp Channel announcement box
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Post History */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">📋 Post History ({whatsappHistory.length})</h2>
+              {whatsappHistory.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-8">No posts generated yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {whatsappHistory.map((post: any) => (
+                    <div key={post.id} className={`p-4 rounded-xl border ${post.posted ? "bg-gray-50 border-gray-200" : "bg-yellow-50 border-yellow-200"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            post.contentType === "question" ? "bg-blue-100 text-blue-700" :
+                            post.contentType === "tip" ? "bg-purple-100 text-purple-700" :
+                            post.contentType === "fact" ? "bg-orange-100 text-orange-700" :
+                            post.contentType === "motivation" ? "bg-green-100 text-green-700" :
+                            "bg-yellow-100 text-yellow-700"
+                          }`}>
+                            {post.contentType}
+                          </span>
+                          {post.posted ? (
+                            <span className="text-xs text-green-600 font-semibold">✅ Posted {new Date(post.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                          ) : (
+                            <span className="text-xs text-yellow-600 font-semibold">⏳ Not posted</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(post.content);
+                            alert("Copied to clipboard!");
+                          }}
+                          className="text-xs text-brand-600 hover:text-brand-800 font-semibold"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-3">{post.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Posting Schedule Reference */}
+            <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6">
+              <h2 className="text-lg font-bold text-blue-800 mb-3">📅 Recommended Posting Schedule</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
+                  <span className="text-xl">📐</span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Mon, Wed, Fri — 7pm</p>
+                    <p className="text-gray-500 text-xs">Can You Solve This?</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
+                  <span className="text-xl">💡</span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Tuesday — 7pm</p>
+                    <p className="text-gray-500 text-xs">Exam Smart Tip</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
+                  <span className="text-xl">🏆</span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Thursday — 7pm</p>
+                    <p className="text-gray-500 text-xs">Student Success / Leaderboard</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
+                  <span className="text-xl">🔍</span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Saturday — 10am</p>
+                    <p className="text-gray-500 text-xs">Did You Know? / Maths in Real Life</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white rounded-xl p-3 md:col-span-2">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Sunday — 7pm</p>
+                    <p className="text-gray-500 text-xs">Week Ahead + Motivation + Stats</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
