@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useAuth } from "./context/AuthContext"; // adjust path if needed
 
 function TypewriterText() {
   const phrases = [
@@ -83,6 +84,9 @@ const topics = [
 ];
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const isLoggedIn = !!user;
+
   return (
     <main>
 
@@ -98,12 +102,25 @@ export default function Home() {
             <TypewriterText />
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
-            <a href="/register" className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
-              Start Learning Free
-            </a>
-            <a href="/papers" className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
-              Browse Practice Papers
-            </a>
+            {isLoggedIn ? (
+              <>
+                <a href="/dashboard" className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+                  Go to Dashboard
+                </a>
+                <a href="/papers" className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
+                  Practice Papers
+                </a>
+              </>
+            ) : (
+              <>
+                <a href="/register" className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+                  Start Learning Free
+                </a>
+                <a href="/papers" className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
+                  Browse Practice Papers
+                </a>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -218,103 +235,127 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section className="py-20 px-6 bg-brand-50">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Affordable For Every Student</h2>
-          <p className="text-center text-gray-500 mb-12 text-lg">Less than the price of a bus fare. No excuses.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Pricing Section — ONLY show if NOT logged in */}
+      {!isLoggedIn && (
+        <section className="py-20 px-6 bg-brand-50">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-4xl font-bold text-center text-brand-900 mb-4">Affordable For Every Student</h2>
+            <p className="text-center text-gray-500 mb-12 text-lg">Less than the price of a bus fare. No excuses.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-            <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 flex flex-col">
-              <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
-              <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
-              <p className="text-gray-400 text-sm mb-6">You can start for free.</p>
-              <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
-                <li>✅ 5 past exam papers</li>
-                <li>✅ Daily maths challenge</li>
-                <li>✅ Basic topic notes</li>
-                <li>✅ 5 AI questions/day</li>
-              </ul>
-              <a href="/register" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold transition">
-                Get Started Free
-              </a>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 flex flex-col">
-              <h4 className="text-xl font-bold text-gray-800 mb-1">2 Weeks</h4>
-              <p className="text-4xl font-bold text-brand-800 mb-1">$3</p>
-              <p className="text-gray-400 text-sm mb-6">Perfect for exam season</p>
-              <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
-                <li>✅ All 50+ past papers</li>
-                <li>✅ Full solutions</li>
-                <li>✅ Unlimited practice</li>
-                <li>✅ Unlimited AI tutor</li>
-              </ul>
-              <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
-                Unlock for $3
-              </a>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 relative flex flex-col">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
-                POPULAR
+              <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 flex flex-col">
+                <h4 className="text-xl font-bold text-gray-800 mb-1">Free</h4>
+                <p className="text-4xl font-bold text-brand-800 mb-1">$0</p>
+                <p className="text-gray-400 text-sm mb-6">You can start for free.</p>
+                <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+                  <li>✅ 5 past exam papers</li>
+                  <li>✅ Daily maths challenge</li>
+                  <li>✅ Basic topic notes</li>
+                  <li>✅ 5 AI questions/day</li>
+                </ul>
+                <a href="/register" className="block text-center bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold transition">
+                  Get Started Free
+                </a>
               </div>
-              <h4 className="text-xl font-bold text-gray-800 mb-1">1 Month</h4>
-              <p className="text-4xl font-bold text-brand-800 mb-1">$5</p>
-              <p className="text-gray-400 text-sm mb-6">Structured monthly prep</p>
-              <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
-                <li>✅ All 50+ past papers</li>
-                <li>✅ Full solutions</li>
-                <li>✅ Unlimited practice</li>
-                <li>✅ Unlimited AI tutor</li>
-                <li>✅ Performance dashboard</li>
-                <li>✅ Progress tracking</li>
-              </ul>
-              <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
-                Unlock for $5
-              </a>
-            </div>
 
-            <div className="bg-brand-800 rounded-2xl shadow p-8 border border-brand-700 relative flex flex-col">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
-                ⭐ BEST VALUE
+              <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 flex flex-col">
+                <h4 className="text-xl font-bold text-gray-800 mb-1">2 Weeks</h4>
+                <p className="text-4xl font-bold text-brand-800 mb-1">$3</p>
+                <p className="text-gray-400 text-sm mb-6">Perfect for exam season</p>
+                <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+                  <li>✅ All 50+ past papers</li>
+                  <li>✅ Full solutions</li>
+                  <li>✅ Unlimited practice</li>
+                  <li>✅ Unlimited AI tutor</li>
+                </ul>
+                <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
+                  Unlock for $3
+                </a>
               </div>
-              <h4 className="text-xl font-bold text-white mb-1">1 Year</h4>
-              <p className="text-4xl font-bold text-brand-300 mb-1">$45</p>
-              <p className="text-brand-300 text-sm mb-6">Full year access</p>
-              <ul className="text-brand-100 space-y-2 mb-8 text-sm flex-1">
-                <li>✅ Everything in Premium</li>
-                <li>✅ Performance dashboard</li>
-                <li>✅ Exam predictions</li>
-                <li>✅ Offline access</li>
-              </ul>
-              <a href="/upgrade" className="block text-center bg-white hover:bg-brand-50 text-brand-800 py-3 rounded-lg font-semibold transition">
-                Unlock for $45
+
+              <div className="bg-white rounded-2xl shadow p-8 border border-brand-200 relative flex flex-col">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
+                  POPULAR
+                </div>
+                <h4 className="text-xl font-bold text-gray-800 mb-1">1 Month</h4>
+                <p className="text-4xl font-bold text-brand-800 mb-1">$5</p>
+                <p className="text-gray-400 text-sm mb-6">Structured monthly prep</p>
+                <ul className="text-gray-600 space-y-2 mb-8 text-sm flex-1">
+                  <li>✅ All 50+ past papers</li>
+                  <li>✅ Full solutions</li>
+                  <li>✅ Unlimited practice</li>
+                  <li>✅ Unlimited AI tutor</li>
+                  <li>✅ Performance dashboard</li>
+                  <li>✅ Progress tracking</li>
+                </ul>
+                <a href="/upgrade" className="block text-center bg-brand-700 hover:bg-brand-600 text-white py-3 rounded-lg font-semibold transition">
+                  Unlock for $5
+                </a>
+              </div>
+
+              <div className="bg-brand-800 rounded-2xl shadow p-8 border border-brand-700 relative flex flex-col">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-sm font-bold px-4 py-1 rounded-full whitespace-nowrap">
+                  ⭐ BEST VALUE
+                </div>
+                <h4 className="text-xl font-bold text-white mb-1">1 Year</h4>
+                <p className="text-4xl font-bold text-brand-300 mb-1">$45</p>
+                <p className="text-brand-300 text-sm mb-6">Full year access</p>
+                <ul className="text-brand-100 space-y-2 mb-8 text-sm flex-1">
+                  <li>✅ Everything in Premium</li>
+                  <li>✅ Performance dashboard</li>
+                  <li>✅ Exam predictions</li>
+                  <li>✅ Offline access</li>
+                </ul>
+                <a href="/upgrade" className="block text-center bg-white hover:bg-brand-50 text-brand-800 py-3 rounded-lg font-semibold transition">
+                  Unlock for $45
+                </a>
+              </div>
+
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Final CTA — ONLY show if NOT logged in */}
+      {!isLoggedIn && (
+        <section className="py-20 px-6 bg-brand-800 text-white text-center">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-4xl font-bold mb-4">Your ZIMSEC Exam Is Coming.</h2>
+            <p className="text-brand-200 text-xl mb-8">Don't leave it to chance. Start studying smarter today — it's free.</p>
+            <div className="flex gap-4 justify-center flex-wrap">
+              <a href="/register"
+                className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+                Create Free Account
+              </a>
+              <a href="/topics"
+                className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
+                Browse Topics
               </a>
             </div>
-
+            <p className="text-brand-400 text-sm mt-6">No credit card required to start.</p>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* Final CTA */}
-      <section className="py-20 px-6 bg-brand-800 text-white text-center">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl font-bold mb-4">Your ZIMSEC Exam Is Coming.</h2>
-          <p className="text-brand-200 text-xl mb-8">Don't leave it to chance. Start studying smarter today — it's free.</p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <a href="/register"
-              className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
-              Create Free Account
-            </a>
-            <a href="/topics"
-              className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
-              Browse Topics
-            </a>
+      {/* Logged-in CTA — ONLY show if logged in */}
+      {isLoggedIn && (
+        <section className="py-20 px-6 bg-brand-800 text-white text-center">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-4xl font-bold mb-4">Ready to practise, {user?.name?.split(" ")[0]}?</h2>
+            <p className="text-brand-200 text-xl mb-8">Pick up where you left off and keep building your maths skills.</p>
+            <div className="flex gap-4 justify-center flex-wrap">
+              <a href="/practice"
+                className="bg-white text-brand-800 hover:bg-brand-50 px-8 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+                Start Practice
+              </a>
+              <a href="/papers"
+                className="border-2 border-white hover:bg-brand-700 px-8 py-4 rounded-lg font-bold text-lg transition">
+                View Papers
+              </a>
+            </div>
           </div>
-          <p className="text-brand-400 text-sm mt-6">No credit card required to start.</p>
-        </div>
-      </section>
+        </section>
+      )}
 
     </main>
   );
