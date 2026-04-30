@@ -28,6 +28,8 @@ router.get("/", async (req: AuthRequest, res: Response) => {
           grade: true,
           avatarColour: true,
           createdAt: true,
+          syllabusChoice: true,
+          activeSyllabus: true,
         },
       }),
 

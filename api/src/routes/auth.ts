@@ -366,6 +366,7 @@ router.put("/me/update", async (req: Request, res: Response) => {
     const schema = z.object({
       name: z.string().min(2).max(100).optional(),
       grade: z.string().optional(),
+      syllabusChoice: z.array(z.enum(["A", "B"])).optional(),
     });
 
     const parsed = schema.safeParse(req.body);

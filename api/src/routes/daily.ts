@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { awardPoints } from '../points';
 import { checkBadgesAfterDailyChallenge } from '../badges';
+import { buildSyllabusFilter } from "../middleware/syllabusFilter";
 
 const router = Router();
 
@@ -43,8 +44,12 @@ router.get('/today', async (req: Request, res: Response) => {
 
     // Auto-create if none exists
     if (!challenge) {
+      const syllabusFilter = await buildSyllabusFilter(userId || undefined);
       const questions = await prisma.question.findMany({
-        where: { isDailyEligible: true },
+        where: {
+          isDailyEligible: true,
+          ...syllabusFilter,
+        },
       });
 
       if (questions.length === 0) {
