@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { API_URL } from "@/app/lib/api";
 
 export default function SyllabusSwitcher() {
   const { token } = useAuth();
+  const router = useRouter();
   const [active, setActive] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -40,7 +42,7 @@ export default function SyllabusSwitcher() {
       const data = await res.json();
       if (data.success) {
         setActive(data.data.activeSyllabus);
-        window.location.reload();
+        router.refresh();
       }
     } catch {}
     setLoading(false);
