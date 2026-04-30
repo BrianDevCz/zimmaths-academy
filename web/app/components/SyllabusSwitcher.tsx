@@ -49,29 +49,32 @@ export default function SyllabusSwitcher() {
   if (!mounted || !token || !active) return null;
 
   return (
-    <div className="flex items-center gap-0.5 bg-brand-700 rounded-md p-0.5">
-      <button
-        onClick={() => switchSyllabus("A")}
-        disabled={loading}
-        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
-          active === "A"
-            ? "bg-white text-brand-800"
-            : "text-brand-200 hover:text-white"
-        }`}
-      >
-        A
-      </button>
-      <button
-        onClick={() => switchSyllabus("B")}
-        disabled={loading}
-        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
-          active === "B" || active === "BOTH"
-            ? "bg-white text-brand-800"
-            : "text-brand-200 hover:text-white"
-        }`}
-      >
-        B
-      </button>
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="text-[9px] text-brand-300 font-medium leading-none">Syllabus</span>
+      <div className="flex items-center gap-0.5 bg-brand-700 rounded-md p-0.5">
+        <button
+          onClick={() => switchSyllabus("A")}
+          disabled={loading}
+          className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+            active === "A"
+              ? "bg-white text-brand-800"
+              : "text-brand-200 hover:text-white"
+          }`}
+        >
+          A
+        </button>
+        <button
+          onClick={() => switchSyllabus("B")}
+          disabled={loading}
+          className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+            active === "B" || active === "BOTH"
+              ? "bg-white text-brand-800"
+              : "text-brand-200 hover:text-white"
+          }`}
+        >
+          B
+        </button>
+      </div>
     </div>
   );
 }
