@@ -91,6 +91,13 @@ export default function DashboardPage() {
             <p className="text-brand-200 capitalize">
               {user?.grade?.replace("form", "Form ")} · ZimMaths Academy
             </p>
+            {data?.user?.activeSyllabus && (
+              <p className="text-brand-300 text-xs mt-1">
+                📘 Current Syllabus: <span className="font-semibold text-white">
+                  {data.user.activeSyllabus === "BOTH" ? "A & B" : data.user.activeSyllabus}
+                </span>
+              </p>
+            )}
           </div>
         </div>
       </section>

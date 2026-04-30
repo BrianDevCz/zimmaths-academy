@@ -128,6 +128,11 @@ export default function PapersPage() {
                         PREMIUM
                       </span>
                     )}
+                    {paper.syllabus && (
+                      <span className="bg-blue-50 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
+                        Syllabus {paper.syllabus}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex gap-2 mb-4 flex-wrap">

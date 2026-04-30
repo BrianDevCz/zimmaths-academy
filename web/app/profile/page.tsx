@@ -13,6 +13,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({ name: "", grade: "" });
+  const [syllabusChoice, setSyllabusChoice] = useState<string[]>([]);
+  const [activeSyllabus, setActiveSyllabus] = useState<string>("B");
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
 
@@ -44,6 +46,10 @@ export default function ProfilePage() {
           name: dashData.data.user?.name || user?.name || "",
           grade: dashData.data.user?.grade || user?.grade || "",
         });
+        if (dashData.data.user?.syllabusChoice) {
+          setSyllabusChoice(dashData.data.user.syllabusChoice);
+          setActiveSyllabus(dashData.data.user.activeSyllabus || "B");
+        }
       }
 
       if (subData.success) {
@@ -66,7 +72,7 @@ export default function ProfilePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, syllabusChoice }),
       });
       const data = await res.json();
       if (data.success) {
@@ -247,6 +253,76 @@ export default function ProfilePage() {
                 </p>
               )}
             </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Active Syllabus
+              </label>
+              <p className="text-gray-800 px-4 py-3 bg-gray-50 rounded-xl">
+                Syllabus {activeSyllabus === "BOTH" ? "A & B" : activeSyllabus}
+                {syllabusChoice.includes("A") && syllabusChoice.includes("B") && (
+                  <span className="text-brand-600 ml-2">(Switch in navbar)</span>
+                )}
+              </p>
+            </div>
+
+            {editing && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Syllabus Choice
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSyllabusChoice((prev) =>
+                        prev.includes("A") ? prev.filter((s) => s !== "A") : [...prev, "A"]
+                      )
+                    }
+                    className={`border-2 rounded-xl px-4 py-2 text-center font-semibold text-sm transition ${
+                      syllabusChoice.includes("A")
+                        ? "border-brand-600 bg-brand-50 text-brand-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    Syllabus A
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSyllabusChoice((prev) =>
+                        prev.includes("B") ? prev.filter((s) => s !== "B") : [...prev, "B"]
+                      )
+                    }
+                    className={`border-2 rounded-xl px-4 py-2 text-center font-semibold text-sm transition ${
+                      syllabusChoice.includes("B")
+                        ? "border-brand-600 bg-brand-50 text-brand-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    Syllabus B
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSyllabusChoice((prev) =>
+                        prev.includes("A") && prev.includes("B") ? prev.filter(s => s !== "A" && s !== "B") : ["A", "B"]
+                      )
+                    }
+                    className={`border-2 rounded-xl px-4 py-2 text-center font-semibold text-sm transition ${
+                      syllabusChoice.includes("A") && syllabusChoice.includes("B")
+                        ? "border-brand-600 bg-brand-50 text-brand-700"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    Both
+                  </button>
+                </div>
+                {syllabusChoice.length === 0 && (
+                  <p className="text-amber-600 text-xs mt-1.5">Select at least one syllabus.</p>
+                )}
+              </div>
+            )}
 
             {editing && (
               <button
