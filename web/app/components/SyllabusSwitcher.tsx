@@ -49,28 +49,28 @@ export default function SyllabusSwitcher() {
   if (!mounted || !token || !active) return null;
 
   return (
-    <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200 p-1">
+    <div className="flex items-center gap-0.5 bg-brand-700 rounded-md p-0.5">
       <button
         onClick={() => switchSyllabus("A")}
         disabled={loading}
-        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
           active === "A"
-            ? "bg-brand-600 text-white"
-            : "text-gray-500 hover:bg-gray-100"
+            ? "bg-white text-brand-800"
+            : "text-brand-200 hover:text-white"
         }`}
       >
-        Syllabus A
+        A
       </button>
       <button
         onClick={() => switchSyllabus("B")}
         disabled={loading}
-        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
           active === "B" || active === "BOTH"
-            ? "bg-brand-600 text-white"
-            : "text-gray-500 hover:bg-gray-100"
+            ? "bg-white text-brand-800"
+            : "text-brand-200 hover:text-white"
         }`}
       >
-        Syllabus B
+        B
       </button>
     </div>
   );
