@@ -1,15 +1,32 @@
 import { Router, Response } from "express";
 import prisma from '../lib/prisma';
+import jwt from 'jsonwebtoken';
 import { requireAuth, AuthRequest } from "../middleware/auth";
+import { buildSyllabusFilter } from "../middleware/syllabusFilter";
 
 const router = Router();
+
+function getUserId(req: any): string | null {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
 
 // GET random questions for practice — PUBLIC
 router.get("/", async (req: any, res: Response) => {
   try {
     const { topic, difficulty, count = "5", exclude } = req.query;
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
     const excludeIds = exclude ? String(exclude).split(",").filter(Boolean) : [];
-    const where: any = {};
+
+    const where: any = { ...syllabusFilter };
     if (topic) where.topic = { slug: String(topic) };
     if (difficulty && difficulty !== "mixed") where.difficulty = String(difficulty);
     if (excludeIds.length > 0) where.id = { notIn: excludeIds };
@@ -43,6 +60,8 @@ router.get("/", async (req: any, res: Response) => {
 router.get("/search", async (req: any, res: Response) => {
   try {
     const { q, topic, difficulty, page } = req.query;
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
     const pageNum = Math.max(0, parseInt(String(page || "0")));
     const pageSize = 20;
 
@@ -53,6 +72,7 @@ router.get("/search", async (req: any, res: Response) => {
     const searchTerm = String(q).trim();
 
     const where: any = {
+      ...syllabusFilter,
       questionText: { contains: searchTerm, mode: "insensitive" },
     };
 
@@ -107,7 +127,6 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
-        const jwt = require("jsonwebtoken");
         const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET as string) as { userId: string };
         if (decoded?.userId) {
           const subscription = await prisma.subscription.findFirst({

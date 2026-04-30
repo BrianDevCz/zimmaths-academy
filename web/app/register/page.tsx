@@ -24,6 +24,7 @@ function RegisterForm() {
   const [validatingCode, setValidatingCode] = useState(false);
   const [codeError, setCodeError] = useState("");
   const [codeTouched, setCodeTouched] = useState(false);
+  const [selectedSyllabus, setSelectedSyllabus] = useState<string[]>([]);
 
   // Auto-fill referral code from URL
   useEffect(() => {
@@ -54,7 +55,6 @@ function RegisterForm() {
         setCodeError("Invalid referral code. Check and try again.");
       }
     } catch {
-      // Don't block registration if validation fails — just clear the referrer
       setReferrerName("");
     } finally {
       setValidatingCode(false);
@@ -65,12 +65,10 @@ function RegisterForm() {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
 
-    // Validate referral code when user types
     if (name === "referralCode") {
       setCodeTouched(true);
       const trimmed = value.trim();
       if (trimmed.length >= 4) {
-        // Debounce: only validate after user stops typing
         const timer = setTimeout(() => validateReferralCode(trimmed), 500);
         return () => clearTimeout(timer);
       } else {
@@ -82,10 +80,10 @@ function RegisterForm() {
 
   const handleGoogleSignUp = async () => {
     setGoogleLoading(true);
+    const syllabusParam = selectedSyllabus.length > 0 ? selectedSyllabus.join(",") : "B";
     const finalRefCode = formData.referralCode || urlRefCode;
-    const callbackUrl = finalRefCode
-      ? `/auth/google-callback?redirect=/dashboard&ref=${finalRefCode}`
-      : "/auth/google-callback?redirect=/dashboard";
+    let callbackUrl = `/auth/google-callback?redirect=/dashboard&syllabus=${syllabusParam}`;
+    if (finalRefCode) callbackUrl += `&ref=${finalRefCode}`;
     await signIn("google", { callbackUrl });
   };
 
@@ -107,7 +105,11 @@ function RegisterForm() {
       return;
     }
 
-    // If there's a code error, warn but don't block
+    if (selectedSyllabus.length === 0) {
+      setError("Please select at least one syllabus.");
+      return;
+    }
+
     if (codeError && formData.referralCode.trim()) {
       setError("Please fix the referral code or remove it before continuing.");
       return;
@@ -125,6 +127,7 @@ function RegisterForm() {
           password: formData.password,
           grade: formData.grade,
           referralCode: formData.referralCode.trim() || undefined,
+          syllabusChoice: selectedSyllabus.length > 0 ? selectedSyllabus : ["B"],
         }),
       });
 
@@ -173,7 +176,7 @@ function RegisterForm() {
             <p className="text-gray-500">Join thousands of Zimbabwe students passing maths</p>
           </div>
 
-          {/* Referral Banner — shows when valid code is entered */}
+          {/* Referral Banner */}
           {referrerName && (
             <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg mb-5 text-sm text-center animate-fade-in">
               🎁 <strong>{referrerName}</strong> invited you to ZimMaths! They'll earn rewards when you upgrade.
@@ -204,7 +207,7 @@ function RegisterForm() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-5 text-sm">
-              ⚠️ {error}
+              {error}
             </div>
           )}
 
@@ -233,7 +236,67 @@ function RegisterForm() {
               </select>
             </div>
 
-            {/* Referral Code Field — NEW */}
+            {/* Syllabus Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Which syllabus are you studying?
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedSyllabus((prev) =>
+                      prev.includes("A") ? prev.filter((s) => s !== "A") : [...prev, "A"]
+                    )
+                  }
+                  className={`border-2 rounded-xl px-4 py-3 text-center font-semibold text-sm transition ${
+                    selectedSyllabus.includes("A")
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  Syllabus A
+                  <span className="block text-xs font-normal text-gray-400 mt-0.5">Functional</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedSyllabus((prev) =>
+                      prev.includes("B") ? prev.filter((s) => s !== "B") : [...prev, "B"]
+                    )
+                  }
+                  className={`border-2 rounded-xl px-4 py-3 text-center font-semibold text-sm transition ${
+                    selectedSyllabus.includes("B")
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  Syllabus B
+                  <span className="block text-xs font-normal text-gray-400 mt-0.5">Professional</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedSyllabus(prev =>
+                      prev.includes("A") && prev.includes("B") ? prev.filter(s => s !== "A" && s !== "B") : ["A", "B"]
+                    )
+                  }
+                  className={`border-2 rounded-xl px-4 py-3 text-center font-semibold text-sm transition ${
+                    selectedSyllabus.includes("A") && selectedSyllabus.includes("B")
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  Both
+                  <span className="block text-xs font-normal text-gray-400 mt-0.5">All content</span>
+                </button>
+              </div>
+              {selectedSyllabus.length === 0 && (
+                <p className="text-amber-600 text-xs mt-1.5">Select at least one syllabus to continue.</p>
+              )}
+            </div>
+
+            {/* Referral Code Field */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Referral Code <span className="text-gray-400 font-normal">(optional)</span>
@@ -266,7 +329,7 @@ function RegisterForm() {
                 <p className="text-green-600 text-xs mt-1.5">✅ Referral by <strong>{referrerName}</strong></p>
               )}
               {codeError && codeTouched && (
-                <p className="text-red-500 text-xs mt-1.5">⚠️ {codeError}</p>
+                <p className="text-red-500 text-xs mt-1.5">{codeError}</p>
               )}
               {!referrerName && !codeError && formData.referralCode.trim() && codeTouched && !validatingCode && (
                 <p className="text-gray-400 text-xs mt-1.5">Leave blank if you don't have a referral code</p>

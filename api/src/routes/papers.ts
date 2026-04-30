@@ -1,14 +1,30 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import jwt from 'jsonwebtoken';
+import { buildSyllabusFilter } from "../middleware/syllabusFilter";
 
 const router = Router();
+
+function getUserId(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    return decoded.userId;
+  } catch {
+    return null;
+  }
+}
 
 // GET all papers
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { year, session, paper, topic, difficulty } = req.query;
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
 
-    const where: any = {};
+    const where: any = { ...syllabusFilter };
 
     if (year) where.year = parseInt(year as string);
     if (session) where.session = session;
@@ -82,9 +98,6 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET single question
 router.get('/questions/:questionId', async (req: Request, res: Response) => {
   try {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
-    
     const question = await prisma.question.findUnique({
       where: { id: String(req.params.questionId) },
       include: {

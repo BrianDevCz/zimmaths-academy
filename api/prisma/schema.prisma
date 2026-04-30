@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DATABASE_URL")
 }
 
+enum SyllabusType {
+  A
+  B
+  BOTH
+}
+
 model User {
   id                     String                  @id @default(uuid())
   name                   String
@@ -27,6 +33,8 @@ model User {
   role                   String                  @default("student")
   referralCode           String                  @unique @default(uuid())
   referredBy             String?
+  syllabusChoice         SyllabusType[]          @default([B])
+  activeSyllabus         SyllabusType            @default(B)
   aiChatUsage            AiChatUsage[]
   bookmarks              Bookmark[]
   dailyChallengeAttempts DailyChallengeAttempt[]
@@ -43,6 +51,7 @@ model User {
   @@index([createdAt])
   @@index([role])
   @@index([referralCode])
+  @@index([activeSyllabus])
 }
 
 model Referral {
@@ -97,27 +106,31 @@ model Topic {
   orderIndex     Int
   icon           String?
   tier           Int            @default(1)
+  syllabus       SyllabusType   @default(BOTH)
   lessons        Lesson[]
   practiceTests  PracticeTest[]
   questions      Question[]
 }
 
 model Paper {
-  id                String     @id @default(uuid())
+  id                String       @id @default(uuid())
   year              Int
   session           String
   paperNumber       Int
   title             String
   pdfUrl            String?
-  difficultyOverall String     @default("medium")
-  isFree            Boolean    @default(false)
+  difficultyOverall String       @default("medium")
+  isFree            Boolean      @default(false)
   totalMarks        Int?
   questionCount     Int?
-  createdAt         DateTime   @default(now())
+  createdAt         DateTime     @default(now())
+  syllabus          SyllabusType @default(B)
+  syllabusCode      String?
   questions         Question[]
 
   @@index([isFree])
   @@index([title])
+  @@index([syllabus])
 }
 
 model Question {
@@ -137,6 +150,7 @@ model Question {
   isDailyEligible  Boolean          @default(false)
   createdAt        DateTime         @default(now())
   correctAnswer    String?
+  syllabus         SyllabusType     @default(B)
   bookmarks        Bookmark[]
   dailyChallenges  DailyChallenge[]
   paper            Paper?           @relation(fields: [paperId], references: [id])
@@ -147,6 +161,7 @@ model Question {
   @@index([isFree])
   @@index([isDailyEligible])
   @@index([difficulty])
+  @@index([syllabus])
 }
 
 model Lesson {
@@ -161,11 +176,13 @@ model Lesson {
   videoUrl         String?
   geogebraUrl      String?
   imageUrl         String?
+  syllabus         SyllabusType         @default(B)
   topic            Topic                @relation(fields: [topicId], references: [id])
   progress         UserLessonProgress[]
 
   @@index([topicId])
   @@index([orderIndex])
+  @@index([syllabus])
 }
 
 model PracticeTest {

@@ -3,6 +3,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
+import SyllabusSwitcher from "./SyllabusSwitcher";
 
 export default function Navbar() {
   const router = useRouter();
@@ -56,6 +57,7 @@ export default function Navbar() {
               {link.label}
             </a>
           ))}
+          {user && <SyllabusSwitcher />}
         </div>
 
         {/* Desktop Auth */}
@@ -214,6 +216,11 @@ export default function Navbar() {
               {link.label}
             </a>
           ))}
+          {user && (
+            <div className="py-2 px-3">
+              <SyllabusSwitcher />
+            </div>
+          )}
           {!user && (
             <a
               href="/register"

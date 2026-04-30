@@ -19,6 +19,7 @@ import badgesRouter from "./routes/badges";
 import shareRouter from "./routes/share";
 import referralsRouter from "./routes/referrals";
 import whatsappRouter from "./routes/whatsapp";
+import syllabusRouter from "./routes/syllabus";
 
 dotenv.config();
 
@@ -160,6 +161,7 @@ app.use("/api/bookmarks", requireAuth, bookmarksRouter);
 app.use("/api/badges", requireAuth, badgesRouter);
 app.use("/api/referrals", requireAuth, referralsRouter);
 app.use("/api/admin/whatsapp", requireAdmin, whatsappRouter);
+app.use("/api/syllabus", requireAuth, syllabusRouter);
 
 // Health check
 app.get("/api/health", (req, res) => {

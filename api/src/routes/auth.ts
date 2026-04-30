@@ -33,16 +33,12 @@ async function updateLoginStreak(userId: string): Promise<number> {
   let newStreak = user.streakCount;
 
   if (!lastActiveDay) {
-    // First login ever
     newStreak = 1;
   } else if (lastActiveDay.getTime() === today.getTime()) {
-    // Already logged in today — don't change streak
     return newStreak;
   } else if (lastActiveDay.getTime() === yesterday.getTime()) {
-    // Logged in yesterday — extend streak
     newStreak = user.streakCount + 1;
   } else {
-    // Missed a day — reset streak
     newStreak = 1;
   }
 
@@ -51,7 +47,6 @@ async function updateLoginStreak(userId: string): Promise<number> {
     data: { streakCount: newStreak, lastActive: now },
   });
 
-  // Award streak points
   if (newStreak === 7) {
     await awardPoints(userId, 'streak_7');
   } else if (newStreak === 30) {
@@ -70,6 +65,7 @@ router.post("/register", async (req: Request, res: Response) => {
       password: z.string().min(6).max(100),
       grade: z.string().optional(),
       referralCode: z.string().optional(),
+      syllabusChoice: z.array(z.enum(["A", "B"])).optional(),
     });
 
     const parsed = schema.safeParse(req.body);
@@ -80,7 +76,7 @@ router.post("/register", async (req: Request, res: Response) => {
       });
     }
 
-    const { name, email, password, grade, referralCode: refCode } = parsed.data;
+    const { name, email, password, grade, referralCode: refCode, syllabusChoice } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -106,6 +102,8 @@ router.post("/register", async (req: Request, res: Response) => {
         verifyToken,
         verifyTokenExp,
         referralCode,
+        syllabusChoice: syllabusChoice && syllabusChoice.length > 0 ? syllabusChoice : ["B"],
+        activeSyllabus: "B",
       },
     });
 
@@ -407,6 +405,8 @@ router.post("/google", async (req: Request, res: Response) => {
           emailVerified: true,
           grade: null,
           referralCode,
+          syllabusChoice: ["B"],
+          activeSyllabus: "B",
         },
       });
     } else if (!user.emailVerified) {

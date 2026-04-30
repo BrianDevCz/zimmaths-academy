@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { awardPoints } from '../points';
 import { checkBadgesAfterLessonComplete } from '../badges';
+import { buildSyllabusFilter } from "../middleware/syllabusFilter";
 
 const router = Router();
 
@@ -21,7 +22,10 @@ function getUserId(req: Request): string | null {
 // GET all topics
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
     const topics = await prisma.topic.findMany({
+      where: syllabusFilter,
       orderBy: { orderIndex: 'asc' },
     });
     res.json({ success: true, count: topics.length, data: topics });
