@@ -11,6 +11,7 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
     const [
       totalUsers, totalPapers, totalQuestions, activeSubscriptions,
       totalRevenue, recentUsers, totalPracticeTests, totalPointsAwarded,
+      syllabusABreakdown, syllabusBBreakdown, syllabusBothBreakdown,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.paper.count(),
@@ -24,6 +25,9 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
       }),
       prisma.practiceTest.count(),
       prisma.userPoint.aggregate({ _sum: { points: true } }),
+      prisma.question.count({ where: { syllabus: "A" } }),
+      prisma.question.count({ where: { syllabus: "B" } }),
+      prisma.question.count({ where: { syllabus: "BOTH" } }),
     ]);
 
     return res.status(200).json({
@@ -33,6 +37,11 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
         totalRevenue: totalRevenue._sum.amountUsd || 0,
         recentUsers, totalPracticeTests,
         totalPointsAwarded: totalPointsAwarded._sum.points || 0,
+        syllabusBreakdown: {
+          A: syllabusABreakdown,
+          B: syllabusBBreakdown,
+          BOTH: syllabusBothBreakdown,
+        },
       },
     });
   } catch (error) {
@@ -41,7 +50,7 @@ router.get("/stats", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// GET /api/admin/users — with search and pagination
+// GET /api/admin/users
 router.get("/users", async (req: AuthRequest, res: Response) => {
   try {
     const { search, page } = req.query;
@@ -65,7 +74,7 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
         skip: pageNum * pageSize,
         select: {
           id: true, name: true, email: true, grade: true, role: true,
-          createdAt: true, lastActive: true,
+          createdAt: true, lastActive: true, syllabusChoice: true, activeSyllabus: true,
           subscription: { select: { status: true, plan: true, expiresAt: true } },
         },
       }),
@@ -99,24 +108,13 @@ router.put("/users/:id/role", async (req: AuthRequest, res: Response) => {
 router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
   try {
     const userId = String(req.params.id);
-
-    // Prevent deleting yourself
     if (userId === req.userId) {
       return res.status(400).json({ success: false, error: "You cannot delete your own account." });
     }
-
-    // Check user exists
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({ success: false, error: "User not found." });
-    }
+    if (!user) return res.status(404).json({ success: false, error: "User not found." });
+    if (user.role === "admin") return res.status(400).json({ success: false, error: "Cannot delete an admin account." });
 
-    // Prevent deleting other admins
-    if (user.role === "admin") {
-      return res.status(400).json({ success: false, error: "Cannot delete an admin account." });
-    }
-
-    // Delete related data first to avoid FK constraint errors
     await prisma.userPoint.deleteMany({ where: { userId } });
     await prisma.userBadge.deleteMany({ where: { userId } });
     await prisma.bookmark.deleteMany({ where: { userId } });
@@ -157,6 +155,8 @@ router.post("/papers", async (req: AuthRequest, res: Response) => {
       session: z.enum(["june", "november"]),
       paperNumber: z.number().int().min(1).max(2),
       isFree: z.boolean().default(false),
+      syllabus: z.enum(["A", "B", "BOTH"]).default("B"),
+      syllabusCode: z.string().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
@@ -229,6 +229,7 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       questionImageUrl: z.string().optional(),
       isFree: z.boolean().default(false),
       isDailyEligible: z.boolean().default(false),
+      syllabus: z.enum(["A", "B", "BOTH"]).default("B"),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
@@ -283,6 +284,7 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
             isFree: q.isFree === "true" || q.isFree === true,
             isDailyEligible: q.isDailyEligible === "true" || q.isDailyEligible === true,
             questionImageUrl: q.questionImageUrl || null,
+            syllabus: q.syllabus || "B",
           },
         });
         results.imported++;
@@ -318,6 +320,29 @@ router.delete("/questions/:id", async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("Admin delete question error:", error);
     return res.status(500).json({ success: false, error: "Failed to delete question." });
+  }
+});
+
+// POST /api/admin/questions/retag — bulk retag questions by topic or paper
+router.post("/questions/retag", async (req: AuthRequest, res: Response) => {
+  try {
+    const { topicId, paperId, syllabus } = req.body;
+    if (!syllabus || !["A", "B", "BOTH"].includes(syllabus)) {
+      return res.status(400).json({ success: false, error: "Valid syllabus (A, B, BOTH) is required." });
+    }
+    if (!topicId && !paperId) {
+      return res.status(400).json({ success: false, error: "Provide topicId or paperId to retag." });
+    }
+
+    const where: any = {};
+    if (topicId) where.topicId = String(topicId);
+    if (paperId) where.paperId = String(paperId);
+
+    const result = await prisma.question.updateMany({ where, data: { syllabus } });
+    return res.status(200).json({ success: true, data: { count: result.count, syllabus } });
+  } catch (error) {
+    console.error("Retag error:", error);
+    return res.status(500).json({ success: false, error: "Failed to retag questions." });
   }
 });
 
@@ -401,6 +426,7 @@ router.post("/lessons", async (req: AuthRequest, res: Response) => {
       videoUrl: z.string().optional(),
       geogebraUrl: z.string().optional(),
       imageUrl: z.string().optional(),
+      syllabus: z.enum(["A", "B", "BOTH"]).default("B"),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, error: parsed.error.issues[0].message });
