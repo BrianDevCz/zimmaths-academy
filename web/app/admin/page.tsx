@@ -67,18 +67,25 @@ export default function AdminPage() {
 
   const [paperForm, setPaperForm] = useState({
     title: "", year: new Date().getFullYear(), session: "november", paperNumber: 1, isFree: false,
+    syllabus: "B", syllabusCode: "",
   });
 
   const [questionForm, setQuestionForm] = useState({
     paperId: "", topicId: "", questionNumber: 1, questionText: "",
     marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "",
-    isFree: false, isDailyEligible: false, questionImageUrl: "",
+    isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B",
   });
 
   const [lessonForm, setLessonForm] = useState({
     topicId: "", title: "", content: "", orderIndex: 1,
     isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "",
+    syllabus: "B",
   });
+
+  // Retag state
+  const [retagTopicId, setRetagTopicId] = useState("");
+  const [retagPaperId, setRetagPaperId] = useState("");
+  const [retagSyllabus, setRetagSyllabus] = useState("BOTH");
 
   const getHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("zim_token")}`,
@@ -108,6 +115,8 @@ export default function AdminPage() {
     if (activeTab === "analytics") fetchAnalytics();
     if (activeTab === "whatsapp") fetchWhatsappHistory();
   }, [activeTab, token, selectedPaperId]);
+
+  // ── Fetch functions ──────────────────────────────────────────
 
   const fetchStats = async () => {
     setLoading(true);
@@ -226,6 +235,8 @@ export default function AdminPage() {
     } catch {}
   };
 
+  // ── Action handlers ──────────────────────────────────────────
+
   const handleGenerateWhatsapp = async () => {
     setWhatsappGenerating(true);
     setWhatsappCopied(false);
@@ -250,43 +261,27 @@ export default function AdminPage() {
     await navigator.clipboard.writeText(whatsappGenerated.content);
     setWhatsappCopied(true);
     setTimeout(() => setWhatsappCopied(false), 2500);
-    
     try {
-      await fetch(`${API_URL}/api/admin/whatsapp/post`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({ id: whatsappGenerated.id }),
-      });
+      await fetch(`${API_URL}/api/admin/whatsapp/post`, { method: "POST", headers: getHeaders(), body: JSON.stringify({ id: whatsappGenerated.id }) });
       fetchWhatsappHistory();
     } catch {}
   };
 
   const handleScheduleChallenge = async () => {
     setFormError(""); setFormMessage("");
-    if (!challengeForm.questionId || !challengeForm.date) {
-      setFormError("Please select a question and date."); return;
-    }
+    if (!challengeForm.questionId || !challengeForm.date) { setFormError("Please select a question and date."); return; }
     try {
-      const res = await fetch(`${API_URL}/api/admin/daily-challenges`, {
-        method: "POST", headers: getHeaders(),
-        body: JSON.stringify(challengeForm),
-      });
+      const res = await fetch(`${API_URL}/api/admin/daily-challenges`, { method: "POST", headers: getHeaders(), body: JSON.stringify(challengeForm) });
       const data = await res.json();
-      if (data.success) {
-        setFormMessage("Challenge scheduled successfully!");
-        setChallengeForm({ questionId: "", date: "" });
-        fetchDailyChallenges();
-      } else { setFormError(data.error); }
+      if (data.success) { setFormMessage("Challenge scheduled successfully!"); setChallengeForm({ questionId: "", date: "" }); fetchDailyChallenges(); }
+      else { setFormError(data.error); }
     } catch { setFormError("Failed to schedule challenge."); }
   };
 
   const handleDeleteChallenge = async (id: string) => {
     if (!confirm("Delete this challenge? All attempts will also be deleted.")) return;
-    try {
-      await fetch(`${API_URL}/api/admin/daily-challenges/${id}`, { method: "DELETE", headers: getHeaders() });
-      fetchDailyChallenges();
-      setFormMessage("Challenge deleted.");
-    } catch { setFormError("Failed to delete challenge."); }
+    try { await fetch(`${API_URL}/api/admin/daily-challenges/${id}`, { method: "DELETE", headers: getHeaders() }); fetchDailyChallenges(); setFormMessage("Challenge deleted."); }
+    catch { setFormError("Failed to delete challenge."); }
   };
 
   const handleAddPaper = async () => {
@@ -294,29 +289,31 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/papers`, {
         method: "POST", headers: getHeaders(),
-        body: JSON.stringify({
-          ...paperForm,
-          year: parseInt(String(paperForm.year)),
-          paperNumber: parseInt(String(paperForm.paperNumber)),
-        }),
+        body: JSON.stringify({ ...paperForm, year: parseInt(String(paperForm.year)), paperNumber: parseInt(String(paperForm.paperNumber)) }),
       });
       const data = await res.json();
-      if (data.success) {
-        setFormMessage("Paper added successfully!");
-        fetchPapers();
-        setPaperForm({ title: "", year: new Date().getFullYear(), session: "november", paperNumber: 1, isFree: false });
-      } else { setFormError(data.error); }
+      if (data.success) { setFormMessage("Paper added successfully!"); fetchPapers(); setPaperForm({ title: "", year: new Date().getFullYear(), session: "november", paperNumber: 1, isFree: false, syllabus: "B", syllabusCode: "" }); }
+      else { setFormError(data.error); }
     } catch { setFormError("Failed to add paper."); }
   };
 
   const handleTogglePaperFree = async (paperId: string, currentValue: boolean) => {
+    try { await fetch(`${API_URL}/api/admin/papers/${paperId}`, { method: "PUT", headers: getHeaders(), body: JSON.stringify({ isFree: !currentValue }) }); fetchPapers(); }
+    catch { setFormError("Failed to update paper."); }
+  };
+
+  const handleRetag = async () => {
+    setFormError(""); setFormMessage("");
+    if (!retagTopicId && !retagPaperId) { setFormError("Select a topic or paper to retag."); return; }
     try {
-      await fetch(`${API_URL}/api/admin/papers/${paperId}`, {
-        method: "PUT", headers: getHeaders(),
-        body: JSON.stringify({ isFree: !currentValue }),
-      });
-      fetchPapers();
-    } catch { setFormError("Failed to update paper."); }
+      const body: any = { syllabus: retagSyllabus };
+      if (retagTopicId) body.topicId = retagTopicId;
+      if (retagPaperId) body.paperId = retagPaperId;
+      const res = await fetch(`${API_URL}/api/admin/questions/retag`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) { setFormMessage(`${data.data.count} questions retagged to ${data.data.syllabus}!`); if (selectedPaperId) fetchQuestions(selectedPaperId); fetchPracticeQuestions(); }
+      else { setFormError(data.error); }
+    } catch { setFormError("Failed to retag questions."); }
   };
 
   const handleAddQuestion = async () => {
@@ -324,22 +321,14 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/questions`, {
         method: "POST", headers: getHeaders(),
-        body: JSON.stringify({
-          ...questionForm,
-          paperId: questionForm.paperId || null,
-          questionNumber: parseInt(String(questionForm.questionNumber)),
-          marks: parseInt(String(questionForm.marks)),
-        }),
+        body: JSON.stringify({ ...questionForm, paperId: questionForm.paperId || null, questionNumber: parseInt(String(questionForm.questionNumber)), marks: parseInt(String(questionForm.marks)) }),
       });
       const data = await res.json();
       if (data.success) {
         setFormMessage("Question added successfully!");
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
         fetchPracticeQuestions();
-        setQuestionForm((prev) => ({
-          ...prev, questionNumber: prev.questionNumber + 1,
-          questionText: "", correctAnswer: "", solutionText: "", questionImageUrl: "",
-        }));
+        setQuestionForm((prev) => ({ ...prev, questionNumber: prev.questionNumber + 1, questionText: "", correctAnswer: "", solutionText: "", questionImageUrl: "" }));
       } else { setFormError(data.error); }
     } catch { setFormError("Failed to add question."); }
   };
@@ -351,6 +340,7 @@ export default function AdminPage() {
       questionText: q.questionText, marks: q.marks, difficulty: q.difficulty,
       correctAnswer: q.correctAnswer || "", solutionText: q.solutionText || "",
       isFree: q.isFree, isDailyEligible: q.isDailyEligible, questionImageUrl: q.questionImageUrl || "",
+      syllabus: q.syllabus || "B",
     });
     if (q.paperId) { setSelectedPaperId(q.paperId); fetchQuestions(q.paperId); }
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -361,17 +351,12 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/questions/${editingQuestionId}`, {
         method: "PUT", headers: getHeaders(),
-        body: JSON.stringify({
-          ...questionForm, paperId: questionForm.paperId || null,
-          questionNumber: parseInt(String(questionForm.questionNumber)),
-          marks: parseInt(String(questionForm.marks)),
-        }),
+        body: JSON.stringify({ ...questionForm, paperId: questionForm.paperId || null, questionNumber: parseInt(String(questionForm.questionNumber)), marks: parseInt(String(questionForm.marks)) }),
       });
       const data = await res.json();
       if (data.success) {
-        setFormMessage("Question updated successfully!");
-        setEditingQuestionId(null);
-        setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "" });
+        setFormMessage("Question updated successfully!"); setEditingQuestionId(null);
+        setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B" });
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
         fetchPracticeQuestions();
       } else { setFormError(data.error); }
@@ -383,28 +368,17 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/lessons`, {
         method: "POST", headers: getHeaders(),
-        body: JSON.stringify({
-          ...lessonForm,
-          orderIndex: parseInt(String(lessonForm.orderIndex)),
-          estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)),
-        }),
+        body: JSON.stringify({ ...lessonForm, orderIndex: parseInt(String(lessonForm.orderIndex)), estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)) }),
       });
       const data = await res.json();
-      if (data.success) {
-        setFormMessage("Lesson added successfully!");
-        fetchLessons(lessonForm.topicId || undefined);
-        setLessonForm((prev) => ({ ...prev, title: "", content: "", videoUrl: "", imageUrl: "", orderIndex: prev.orderIndex + 1 }));
-      } else { setFormError(data.error); }
+      if (data.success) { setFormMessage("Lesson added successfully!"); fetchLessons(lessonForm.topicId || undefined); setLessonForm((prev) => ({ ...prev, title: "", content: "", videoUrl: "", imageUrl: "", orderIndex: prev.orderIndex + 1 })); }
+      else { setFormError(data.error); }
     } catch { setFormError("Failed to add lesson."); }
   };
 
   const handleEditLesson = (lesson: any) => {
     setEditingLessonId(lesson.id);
-    setLessonForm({
-      topicId: lesson.topicId || "", title: lesson.title, content: lesson.content,
-      orderIndex: lesson.orderIndex, isFree: lesson.isFree, estimatedMinutes: lesson.estimatedMinutes,
-      videoUrl: lesson.videoUrl || "", geogebraUrl: lesson.geogebraUrl || "", imageUrl: lesson.imageUrl || "",
-    });
+    setLessonForm({ topicId: lesson.topicId || "", title: lesson.title, content: lesson.content, orderIndex: lesson.orderIndex, isFree: lesson.isFree, estimatedMinutes: lesson.estimatedMinutes, videoUrl: lesson.videoUrl || "", geogebraUrl: lesson.geogebraUrl || "", imageUrl: lesson.imageUrl || "", syllabus: lesson.syllabus || "B" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -413,52 +387,21 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/lessons/${editingLessonId}`, {
         method: "PUT", headers: getHeaders(),
-        body: JSON.stringify({
-          ...lessonForm,
-          orderIndex: parseInt(String(lessonForm.orderIndex)),
-          estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)),
-        }),
+        body: JSON.stringify({ ...lessonForm, orderIndex: parseInt(String(lessonForm.orderIndex)), estimatedMinutes: parseInt(String(lessonForm.estimatedMinutes)) }),
       });
       const data = await res.json();
-      if (data.success) {
-        setFormMessage("Lesson updated successfully!");
-        setEditingLessonId(null);
-        setLessonForm({ topicId: "", title: "", content: "", orderIndex: 1, isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "" });
-        fetchLessons();
-      } else { setFormError(data.error); }
+      if (data.success) { setFormMessage("Lesson updated successfully!"); setEditingLessonId(null); setLessonForm({ topicId: "", title: "", content: "", orderIndex: 1, isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "", syllabus: "B" }); fetchLessons(); }
+      else { setFormError(data.error); }
     } catch { setFormError("Failed to update lesson."); }
   };
 
-  const handleDeletePaper = async (id: string) => {
-    if (!confirm("Delete this paper and all its questions?")) return;
-    try {
-      await fetch(`${API_URL}/api/admin/papers/${id}`, { method: "DELETE", headers: getHeaders() });
-      fetchPapers();
-    } catch { setError("Failed to delete paper."); }
-  };
-
-  const handleDeleteQuestion = async (id: string) => {
-    if (!confirm("Delete this question?")) return;
-    try {
-      await fetch(`${API_URL}/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() });
-      if (selectedPaperId) fetchQuestions(selectedPaperId);
-      fetchPracticeQuestions();
-    } catch { setError("Failed to delete question."); }
-  };
-
-  const handleDeleteLesson = async (id: string) => {
-    if (!confirm("Delete this lesson?")) return;
-    try {
-      await fetch(`${API_URL}/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() });
-      fetchLessons();
-    } catch { setError("Failed to delete lesson."); }
-  };
+  const handleDeletePaper = async (id: string) => { if (!confirm("Delete this paper and all its questions?")) return; try { await fetch(`${API_URL}/api/admin/papers/${id}`, { method: "DELETE", headers: getHeaders() }); fetchPapers(); } catch { setError("Failed to delete paper."); } };
+  const handleDeleteQuestion = async (id: string) => { if (!confirm("Delete this question?")) return; try { await fetch(`${API_URL}/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() }); if (selectedPaperId) fetchQuestions(selectedPaperId); fetchPracticeQuestions(); } catch { setError("Failed to delete question."); } };
+  const handleDeleteLesson = async (id: string) => { if (!confirm("Delete this lesson?")) return; try { await fetch(`${API_URL}/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() }); fetchLessons(); } catch { setError("Failed to delete lesson."); } };
 
   const handleActivateSubscription = async (userId: string, plan: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/activate`, {
-        method: "PUT", headers: getHeaders(), body: JSON.stringify({ plan }),
-      });
+      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/activate`, { method: "PUT", headers: getHeaders(), body: JSON.stringify({ plan }) });
       const data = await res.json();
       if (data.success) { setFormMessage("Subscription activated!"); fetchSubscriptions(); fetchUsers(); }
       else { setFormError(data.error); }
@@ -467,63 +410,27 @@ export default function AdminPage() {
 
   const handleCancelSubscription = async (userId: string) => {
     if (!confirm("Cancel this subscription?")) return;
-    try {
-      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/cancel`, {
-        method: "PUT", headers: getHeaders(), body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (data.success) { setFormMessage("Subscription cancelled."); fetchSubscriptions(); fetchUsers(); }
-    } catch { setFormError("Failed to cancel subscription."); }
+    try { const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/cancel`, { method: "PUT", headers: getHeaders(), body: JSON.stringify({}) }); const data = await res.json(); if (data.success) { setFormMessage("Subscription cancelled."); fetchSubscriptions(); fetchUsers(); } }
+    catch { setFormError("Failed to cancel subscription."); }
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!confirm(`Permanently delete "${userName}"? This will delete all their data including points, badges, bookmarks and practice history. This cannot be undone.`)) return;
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
-        method: "DELETE", headers: getHeaders(),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setFormMessage(`User "${userName}" deleted successfully.`);
-        fetchUsers(userSearch, userPage);
-      } else {
-        setFormError(data.error);
-      }
-    } catch { setFormError("Failed to delete user."); }
+    try { const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { method: "DELETE", headers: getHeaders() }); const data = await res.json(); if (data.success) { setFormMessage(`User "${userName}" deleted successfully.`); fetchUsers(userSearch, userPage); } else { setFormError(data.error); } }
+    catch { setFormError("Failed to delete user."); }
   };
 
   const downloadTemplate = () => {
-    const csv = [
-      "topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle",
-      'general-arithmetic,1,"Simplify $\frac{3}{4} + \frac{1}{2}$",2,easy,"$\frac{5}{4}$","Convert to common denominator",true,true,,',
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "zimmaths_questions_template.csv"; a.click();
+    const csv = ["topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle,syllabus", 'general-arithmetic,1,"Simplify $\\frac{3}{4} + \\frac{1}{2}$",2,easy,"$\\frac{5}{4}$","Convert to common denominator",true,true,,,BOTH'].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "zimmaths_questions_template.csv"; a.click();
   };
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split("\n").filter((l) => l.trim());
-      const headers = lines[0].split(",").map((h) => h.trim());
-      const rows = lines.slice(1).map((line) => {
-        const values: string[] = [];
-        let current = ""; let inQuotes = false;
-        for (const char of line) {
-          if (char === '"') { inQuotes = !inQuotes; }
-          else if (char === "," && !inQuotes) { values.push(current.trim()); current = ""; }
-          else { current += char; }
-        }
-        values.push(current.trim());
-        const obj: any = {};
-        headers.forEach((h, i) => { obj[h] = values[i] || ""; });
-        return obj;
-      });
+      const text = event.target?.result as string; const lines = text.split("\n").filter((l) => l.trim()); const headers = lines[0].split(",").map((h) => h.trim());
+      const rows = lines.slice(1).map((line) => { const values: string[] = []; let current = ""; let inQuotes = false; for (const char of line) { if (char === '"') { inQuotes = !inQuotes; } else if (char === "," && !inQuotes) { values.push(current.trim()); current = ""; } else { current += char; } } values.push(current.trim()); const obj: any = {}; headers.forEach((h, i) => { obj[h] = values[i] || ""; }); return obj; });
       setCsvPreview(rows); setImportResult(null);
     };
     reader.readAsText(file);
@@ -533,20 +440,22 @@ export default function AdminPage() {
     if (!token) { setFormError("You must be logged in."); return; }
     setImportLoading(true); setImportResult(null);
     try {
-      const res = await fetch(`${API_URL}/api/admin/questions/import`, {
-        method: "POST", headers: getHeaders(), body: JSON.stringify({ questions: csvPreview }),
-      });
+      const res = await fetch(`${API_URL}/api/admin/questions/import`, { method: "POST", headers: getHeaders(), body: JSON.stringify({ questions: csvPreview }) });
       const data = await res.json();
-      if (data.success) {
-        setImportResult(data.data); setCsvPreview([]);
-        fetchPracticeQuestions();
-        if (selectedPaperId) fetchQuestions(selectedPaperId);
-        setFormMessage(`Successfully imported ${data.data.imported} questions!`);
-      } else { setFormError(data.error || "Import failed"); }
-    } catch (err: any) {
-      setFormError("Failed to import: " + (err?.message || "Unknown error"));
-    } finally { setImportLoading(false); }
+      if (data.success) { setImportResult(data.data); setCsvPreview([]); fetchPracticeQuestions(); if (selectedPaperId) fetchQuestions(selectedPaperId); setFormMessage(`Successfully imported ${data.data.imported} questions!`); }
+      else { setFormError(data.error || "Import failed"); }
+    } catch (err: any) { setFormError("Failed to import: " + (err?.message || "Unknown error")); }
+    finally { setImportLoading(false); }
   };
+
+  // ── Syllabus badge helper ────────────────────────────────────
+
+  const SyllabusBadge = ({ value }: { value: string }) => {
+    const cls = value === "A" ? "bg-blue-50 text-blue-700" : value === "BOTH" ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600";
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{value || "B"}</span>;
+  };
+
+  // ── Tabs ─────────────────────────────────────────────────────
 
   const tabs = [
     { id: "stats", label: "📊 Dashboard" },
@@ -564,10 +473,7 @@ export default function AdminPage() {
   if (loading && activeTab === "stats") {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Loading admin panel...</p>
-        </div>
+        <div className="text-center"><div className="w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" /><p className="text-gray-500">Loading admin panel...</p></div>
       </main>
     );
   }
@@ -576,10 +482,7 @@ export default function AdminPage() {
     <main className="min-h-screen bg-gray-50">
       <section className="bg-brand-800 text-white py-6 px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">⚙️ Admin Panel</h1>
-            <p className="text-brand-200 text-sm">ZimMaths Academy — Content Management</p>
-          </div>
+          <div><h1 className="text-2xl font-bold">⚙️ Admin Panel</h1><p className="text-brand-200 text-sm">ZimMaths Academy — Content Management</p></div>
           <Link href="/" className="text-brand-300 hover:text-white text-sm transition">← Back to Site</Link>
         </div>
       </section>
@@ -587,12 +490,7 @@ export default function AdminPage() {
       <div className="bg-white border-b border-gray-200 px-6">
         <div className="max-w-7xl mx-auto flex gap-1 overflow-x-auto">
           {tabs.map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition ${
-                activeTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-brand-600"
-              }`}>
-              {tab.label}
-            </button>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition ${activeTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-gray-500 hover:text-brand-600"}`}>{tab.label}</button>
           ))}
         </div>
       </div>
@@ -602,48 +500,49 @@ export default function AdminPage() {
         {formMessage && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 text-sm">✅ {formMessage}</div>}
         {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {formError}</div>}
 
-        {/* STATS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            STATS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "stats" && stats && (
           <div className="space-y-8">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
               {[
-                { label: "Total Users", value: stats.totalUsers, icon: "👥" },
-                { label: "Total Papers", value: stats.totalPapers, icon: "📄" },
-                { label: "Total Questions", value: stats.totalQuestions, icon: "❓" },
-                { label: "Active Premium", value: stats.activeSubscriptions, icon: "⭐" },
-                { label: "Total Revenue", value: `$${stats.totalRevenue?.toFixed(2)}`, icon: "💰" },
-                { label: "Practice Tests", value: stats.totalPracticeTests, icon: "✏️" },
+                { label: "Total Users", value: stats.totalUsers, icon: "👥" }, { label: "Total Papers", value: stats.totalPapers, icon: "📄" },
+                { label: "Total Questions", value: stats.totalQuestions, icon: "❓" }, { label: "Active Premium", value: stats.activeSubscriptions, icon: "⭐" },
+                { label: "Total Revenue", value: `$${stats.totalRevenue?.toFixed(2)}`, icon: "💰" }, { label: "Practice Tests", value: stats.totalPracticeTests, icon: "✏️" },
                 { label: "Points Awarded", value: stats.totalPointsAwarded?.toLocaleString(), icon: "🏆" },
               ].map((stat) => (
-                <div key={stat.label} className="bg-white rounded-2xl border border-gray-200 shadow p-4 text-center">
-                  <div className="text-2xl mb-1">{stat.icon}</div>
-                  <p className="text-xl font-bold text-brand-800">{stat.value}</p>
-                  <p className="text-xs text-gray-500">{stat.label}</p>
-                </div>
+                <div key={stat.label} className="bg-white rounded-2xl border border-gray-200 shadow p-4 text-center"><div className="text-2xl mb-1">{stat.icon}</div><p className="text-xl font-bold text-brand-800">{stat.value}</p><p className="text-xs text-gray-500">{stat.label}</p></div>
               ))}
             </div>
+
+            {stats.syllabusBreakdown && (
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: "Syllabus A", value: stats.syllabusBreakdown.A, color: "bg-blue-50 border-blue-200", textColor: "text-blue-700" },
+                  { label: "Syllabus B", value: stats.syllabusBreakdown.B, color: "bg-gray-50 border-gray-200", textColor: "text-gray-700" },
+                  { label: "Both (A & B)", value: stats.syllabusBreakdown.BOTH, color: "bg-purple-50 border-purple-200", textColor: "text-purple-700" },
+                ].map((s) => (
+                  <div key={s.label} className={`bg-white rounded-2xl border shadow p-4 text-center ${s.color}`}>
+                    <p className={`text-2xl font-bold ${s.textColor}`}>{s.value}</p>
+                    <p className="text-xs text-gray-500">{s.label} Questions</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">🆕 Recent Registrations (last 10)</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 text-gray-500 font-medium">Name</th>
-                      <th className="text-left py-2 text-gray-500 font-medium">Email</th>
-                      <th className="text-left py-2 text-gray-500 font-medium">Grade</th>
-                      <th className="text-left py-2 text-gray-500 font-medium">Role</th>
-                      <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
-                    </tr>
-                  </thead>
+                  <thead><tr className="border-b border-gray-100"><th className="text-left py-2 text-gray-500 font-medium">Name</th><th className="text-left py-2 text-gray-500 font-medium">Email</th><th className="text-left py-2 text-gray-500 font-medium">Grade</th><th className="text-left py-2 text-gray-500 font-medium">Role</th><th className="text-left py-2 text-gray-500 font-medium">Syllabus</th><th className="text-left py-2 text-gray-500 font-medium">Joined</th></tr></thead>
                   <tbody>
                     {stats.recentUsers.map((u: any) => (
                       <tr key={u.id} className="border-b border-gray-50">
-                        <td className="py-3 font-medium text-gray-800">{u.name}</td>
-                        <td className="py-3 text-gray-500">{u.email}</td>
+                        <td className="py-3 font-medium text-gray-800">{u.name}</td><td className="py-3 text-gray-500">{u.email}</td>
                         <td className="py-3 text-gray-500 capitalize">{u.grade?.replace("form", "Form ")}</td>
-                        <td className="py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{u.role}</span>
-                        </td>
+                        <td className="py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{u.role}</span></td>
+                        <td className="py-3"><SyllabusBadge value={u.activeSyllabus} /></td>
                         <td className="py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                       </tr>
                     ))}
@@ -654,165 +553,34 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ANALYTICS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            ANALYTICS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "analytics" && (
           <div className="space-y-6">
-            {!analytics ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : (
+            {!analytics ? (<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" /></div>) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {[
-                    { label: "New Users (30d)", value: analytics.summary.totalNewUsers, icon: "👥", color: "text-blue-600" },
-                    { label: "New Subs (30d)", value: analytics.summary.totalNewSubs, icon: "⭐", color: "text-yellow-600" },
-                    { label: "Revenue (30d)", value: `$${analytics.summary.totalNewRevenue.toFixed(2)}`, icon: "💰", color: "text-green-600" },
-                    { label: "Tests Taken (30d)", value: analytics.summary.totalNewTests, icon: "✏️", color: "text-purple-600" },
-                    { label: "Avg Score (30d)", value: `${analytics.summary.avgScore}%`, icon: "🎯", color: "text-brand-600" },
-                  ].map((s) => (
-                    <div key={s.label} className="bg-white rounded-2xl border border-gray-200 shadow p-5 text-center">
-                      <div className="text-2xl mb-1">{s.icon}</div>
-                      <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                      <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-                    </div>
+                  {[{ label: "New Users (30d)", value: analytics.summary.totalNewUsers, icon: "👥", color: "text-blue-600" }, { label: "New Subs (30d)", value: analytics.summary.totalNewSubs, icon: "⭐", color: "text-yellow-600" }, { label: "Revenue (30d)", value: `$${analytics.summary.totalNewRevenue.toFixed(2)}`, icon: "💰", color: "text-green-600" }, { label: "Tests Taken (30d)", value: analytics.summary.totalNewTests, icon: "✏️", color: "text-purple-600" }, { label: "Avg Score (30d)", value: `${analytics.summary.avgScore}%`, icon: "🎯", color: "text-brand-600" }].map((s) => (
+                    <div key={s.label} className="bg-white rounded-2xl border border-gray-200 shadow p-5 text-center"><div className="text-2xl mb-1">{s.icon}</div><p className={`text-2xl font-bold ${s.color}`}>{s.value}</p><p className="text-xs text-gray-500 mt-1">{s.label}</p></div>
                   ))}
                 </div>
 
                 <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                   <h2 className="text-lg font-bold text-gray-800 mb-4">👥 New Registrations — Last 30 Days</h2>
                   <div className="flex items-end gap-1 h-32">
-                    {analytics.daily.map((d: any, i: number) => {
-                      const max = Math.max(...analytics.daily.map((x: any) => x.registrations), 1);
-                      const height = Math.round((d.registrations / max) * 100);
-                      const isToday = d.date === new Date().toISOString().split("T")[0];
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
-                            {d.date}: {d.registrations} users
-                          </div>
-                          <div
-                            className={`w-full rounded-t transition-all ${isToday ? "bg-brand-600" : "bg-brand-200 hover:bg-brand-400"}`}
-                            style={{ height: `${Math.max(height, 2)}%` }}
-                          />
-                        </div>
-                      );
-                    })}
+                    {analytics.daily.map((d: any, i: number) => { const max = Math.max(...analytics.daily.map((x: any) => x.registrations), 1); const height = Math.round((d.registrations / max) * 100); const isToday = d.date === new Date().toISOString().split("T")[0]; return (<div key={i} className="flex-1 flex flex-col items-center gap-1 group relative"><div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">{d.date}: {d.registrations} users</div><div className={`w-full rounded-t transition-all ${isToday ? "bg-brand-600" : "bg-brand-200 hover:bg-brand-400"}`} style={{ height: `${Math.max(height, 2)}%` }} /></div>); })}
                   </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-2">
-                    <span>{analytics.daily[0]?.date}</span>
-                    <span>Today</span>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-4">💰 Daily Revenue — Last 30 Days</h2>
-                  <div className="flex items-end gap-1 h-32">
-                    {analytics.daily.map((d: any, i: number) => {
-                      const max = Math.max(...analytics.daily.map((x: any) => x.revenue), 1);
-                      const height = Math.round((d.revenue / max) * 100);
-                      const isToday = d.date === new Date().toISOString().split("T")[0];
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
-                            {d.date}: ${d.revenue.toFixed(2)}
-                          </div>
-                          <div
-                            className={`w-full rounded-t transition-all ${isToday ? "bg-green-600" : "bg-green-200 hover:bg-green-400"}`}
-                            style={{ height: `${Math.max(height, 2)}%` }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-2">
-                    <span>{analytics.daily[0]?.date}</span>
-                    <span>Today</span>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                  <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice Tests — Last 30 Days</h2>
-                  <div className="flex items-end gap-1 h-32">
-                    {analytics.daily.map((d: any, i: number) => {
-                      const max = Math.max(...analytics.daily.map((x: any) => x.tests), 1);
-                      const height = Math.round((d.tests / max) * 100);
-                      const isToday = d.date === new Date().toISOString().split("T")[0];
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
-                            {d.date}: {d.tests} tests
-                          </div>
-                          <div
-                            className={`w-full rounded-t transition-all ${isToday ? "bg-purple-600" : "bg-purple-200 hover:bg-purple-400"}`}
-                            style={{ height: `${Math.max(height, 2)}%` }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-2">
-                    <span>{analytics.daily[0]?.date}</span>
-                    <span>Today</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                    <h2 className="text-lg font-bold text-gray-800 mb-4">🔥 Most Practiced Topics</h2>
-                    {analytics.topicStats.length === 0 ? (
-                      <p className="text-gray-400 text-sm text-center py-4">No practice data yet.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {analytics.topicStats.map((t: any, i: number) => {
-                          const max = analytics.topicStats[0].count;
-                          const pct = Math.round((t.count / max) * 100);
-                          return (
-                            <div key={t.topicId || i}>
-                              <div className="flex justify-between text-sm mb-1">
-                                <span className="text-gray-700 font-medium">{t.icon} {t.name}</span>
-                                <span className="text-gray-500">{t.count} tests</span>
-                              </div>
-                              <div className="w-full bg-gray-100 rounded-full h-2">
-                                <div className="bg-brand-500 h-2 rounded-full" style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-                    <h2 className="text-lg font-bold text-gray-800 mb-4">⭐ Active Subscription Plans</h2>
-                    {analytics.planBreakdown.length === 0 ? (
-                      <p className="text-gray-400 text-sm text-center py-4">No active subscriptions.</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {analytics.planBreakdown.map((p: any) => (
-                          <div key={p.plan} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                            <div>
-                              <p className="font-semibold text-gray-800 capitalize">{p.plan.replace("_", " ")}</p>
-                              <p className="text-xs text-gray-400">
-                                {p.plan === "two_weeks" ? "$3" : p.plan === "annual" ? "$45" : "$5"} per period
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-brand-700">{p._count.plan}</p>
-                              <p className="text-xs text-gray-400">subscribers</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-2"><span>{analytics.daily[0]?.date}</span><span>Today</span></div>
                 </div>
               </>
             )}
           </div>
         )}
 
-        {/* DAILY CHALLENGES TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            DAILY CHALLENGES TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "daily" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -835,13 +603,11 @@ export default function AdminPage() {
                     <option value="">Select a question...</option>
                     {eligibleQuestions.map((q: any) => (
                       <option key={q.id} value={q.id}>
-                        [{q.topic?.name}] Q{q.questionNumber} — {q.questionText?.slice(0, 60)}...
+                        [{q.topic?.name}] [{q.syllabus || "B"}] Q{q.questionNumber} — {q.questionText?.slice(0, 60)}...
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Only questions marked "Daily Challenge Eligible" appear here. Mark questions eligible in the Questions tab.
-                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Only questions marked &quot;Daily Challenge Eligible&quot; appear here.</p>
                 </div>
               </div>
               <button onClick={handleScheduleChallenge}
@@ -851,9 +617,7 @@ export default function AdminPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">
-                📋 Scheduled Challenges ({dailyChallenges.length})
-              </h2>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">📋 Scheduled Challenges ({dailyChallenges.length})</h2>
               {dailyChallenges.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-6">No challenges scheduled yet.</p>
               ) : (
@@ -864,6 +628,7 @@ export default function AdminPage() {
                         <th className="text-left py-2 text-gray-500 font-medium">Date</th>
                         <th className="text-left py-2 text-gray-500 font-medium">Topic</th>
                         <th className="text-left py-2 text-gray-500 font-medium">Question</th>
+                        <th className="text-left py-2 text-gray-500 font-medium">Syllabus</th>
                         <th className="text-left py-2 text-gray-500 font-medium">Attempts</th>
                         <th className="text-left py-2 text-gray-500 font-medium">Correct</th>
                         <th className="text-left py-2 text-gray-500 font-medium">Status</th>
@@ -883,27 +648,17 @@ export default function AdminPage() {
                               {challengeDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
                             </td>
                             <td className="py-3 text-gray-500">{c.question?.topic?.name}</td>
-                            <td className="py-3 text-gray-600 max-w-xs truncate">
-                              {c.question?.questionText?.slice(0, 60)}...
-                            </td>
+                            <td className="py-3 text-gray-600 max-w-xs truncate">{c.question?.questionText?.slice(0, 60)}...</td>
+                            <td className="py-3"><SyllabusBadge value={c.question?.syllabus} /></td>
                             <td className="py-3 text-gray-500">{c.totalAttempts}</td>
                             <td className="py-3 text-gray-500">{c.correctAttempts}</td>
                             <td className="py-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                isToday ? "bg-green-100 text-green-700" :
-                                isPast ? "bg-gray-100 text-gray-500" :
-                                "bg-blue-100 text-blue-700"
-                              }`}>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isToday ? "bg-green-100 text-green-700" : isPast ? "bg-gray-100 text-gray-500" : "bg-blue-100 text-blue-700"}`}>
                                 {isToday ? "Today" : isPast ? "Past" : "Upcoming"}
                               </span>
                             </td>
                             <td className="py-3">
-                              {!isPast && (
-                                <button onClick={() => handleDeleteChallenge(c.id)}
-                                  className="text-red-500 hover:text-red-700 text-xs font-semibold">
-                                  Delete
-                                </button>
-                              )}
+                              {!isPast && <button onClick={() => handleDeleteChallenge(c.id)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>}
                             </td>
                           </tr>
                         );
@@ -916,7 +671,9 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* PAPERS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            PAPERS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "papers" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -925,7 +682,7 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
                   <input type="text" value={paperForm.title} onChange={(e) => setPaperForm({ ...paperForm, title: e.target.value })}
-                    placeholder="e.g. ZimMaths Practice Paper — November 2024 Paper 1"
+                    placeholder="e.g. ZimMaths Practice Paper"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
                 <div>
@@ -950,15 +707,22 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Syllabus</label>
+                  <select value={paperForm.syllabus} onChange={(e) => setPaperForm({ ...paperForm, syllabus: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="A">Syllabus A (4075)</option>
+                    <option value="B">Syllabus B (4004)</option>
+                    <option value="BOTH">Both</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mt-6">
                     <input type="checkbox" checked={paperForm.isFree} onChange={(e) => setPaperForm({ ...paperForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" />
                     Free paper (visible to all users)
                   </label>
                 </div>
               </div>
-              <button onClick={handleAddPaper} className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
-                Add Paper
-              </button>
+              <button onClick={handleAddPaper} className="mt-4 bg-brand-700 hover:bg-brand-600 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">Add Paper</button>
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -971,6 +735,7 @@ export default function AdminPage() {
                       <th className="text-left py-2 text-gray-500 font-medium">Year</th>
                       <th className="text-left py-2 text-gray-500 font-medium">Session</th>
                       <th className="text-left py-2 text-gray-500 font-medium">Paper</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Syllabus</th>
                       <th className="text-left py-2 text-gray-500 font-medium">Questions</th>
                       <th className="text-left py-2 text-gray-500 font-medium">Free</th>
                       <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
@@ -983,6 +748,7 @@ export default function AdminPage() {
                         <td className="py-3 text-gray-500">{paper.year}</td>
                         <td className="py-3 text-gray-500 capitalize">{paper.session}</td>
                         <td className="py-3 text-gray-500">Paper {paper.paperNumber}</td>
+                        <td className="py-3"><SyllabusBadge value={paper.syllabus} /></td>
                         <td className="py-3 text-gray-500">{paper._count?.questions || 0}</td>
                         <td className="py-3">
                           <button onClick={() => handleTogglePaperFree(paper.id, paper.isFree)}
@@ -995,7 +761,7 @@ export default function AdminPage() {
                         </td>
                       </tr>
                     ))}
-                    {papers.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">No papers yet</td></tr>}
+                    {papers.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">No papers yet</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -1003,9 +769,49 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* QUESTIONS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            QUESTIONS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "questions" && (
           <div className="space-y-6">
+            {/* Retag Tool */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">🏷️ Bulk Retag Questions</h2>
+              <p className="text-sm text-gray-500 mb-4">Change the syllabus tag for all questions in a topic or paper at once.</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Topic</label>
+                  <select value={retagTopicId} onChange={(e) => { setRetagTopicId(e.target.value); if (e.target.value) setRetagPaperId(""); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="">All topics</option>
+                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name} [{t.syllabus || "BOTH"}]</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Paper</label>
+                  <select value={retagPaperId} onChange={(e) => { setRetagPaperId(e.target.value); if (e.target.value) setRetagTopicId(""); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="">All papers</option>
+                    {papers.map((p: any) => <option key={p.id} value={p.id}>{p.title} [{p.syllabus || "B"}]</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">New Syllabus Tag</label>
+                  <select value={retagSyllabus} onChange={(e) => setRetagSyllabus(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="A">A (4075 only)</option>
+                    <option value="B">B (4004 only)</option>
+                    <option value="BOTH">BOTH (shared)</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleRetag}
+                className="mt-4 bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-semibold text-sm transition">
+                Retag Questions
+              </button>
+            </div>
+
+            {/* Batch Import */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-1">📥 Batch Import Questions</h2>
               <p className="text-sm text-gray-500 mb-4">
@@ -1022,6 +828,7 @@ export default function AdminPage() {
                       <div key={i} className="text-xs bg-gray-50 rounded px-3 py-2 flex gap-2 items-center">
                         <span className="text-brand-600 font-medium w-24 flex-shrink-0">{q.topicSlug}</span>
                         <span className="text-gray-400 w-6 flex-shrink-0">Q{q.questionNumber}</span>
+                        <SyllabusBadge value={q.syllabus || "B"} />
                         <span className="text-gray-600 truncate flex-1">{q.questionText}</span>
                       </div>
                     ))}
@@ -1045,20 +852,17 @@ export default function AdminPage() {
               )}
             </div>
 
+            {/* Add / Edit Question Form */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">{editingQuestionId ? "✏️ Edit Question" : "➕ Add New Question"}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Paper <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
                   <select value={questionForm.paperId}
-                    onChange={(e) => {
-                      setQuestionForm({ ...questionForm, paperId: e.target.value });
-                      if (e.target.value) { setSelectedPaperId(e.target.value); fetchQuestions(e.target.value); }
-                      else { setSelectedPaperId(""); setQuestions([]); }
-                    }}
+                    onChange={(e) => { setQuestionForm({ ...questionForm, paperId: e.target.value }); if (e.target.value) { setSelectedPaperId(e.target.value); fetchQuestions(e.target.value); } else { setSelectedPaperId(""); setQuestions([]); } }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">No paper — Practice question only</option>
-                    {papers.map((p: any) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                    {papers.map((p: any) => <option key={p.id} value={p.id}>{p.title} [{p.syllabus || "B"}]</option>)}
                   </select>
                 </div>
                 <div>
@@ -1066,7 +870,7 @@ export default function AdminPage() {
                   <select value={questionForm.topicId} onChange={(e) => setQuestionForm({ ...questionForm, topicId: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">Select a topic...</option>
-                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name} [{t.syllabus || "BOTH"}]</option>)}
                   </select>
                 </div>
                 <div>
@@ -1088,6 +892,15 @@ export default function AdminPage() {
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Syllabus</label>
+                  <select value={questionForm.syllabus} onChange={(e) => setQuestionForm({ ...questionForm, syllabus: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="A">A (4075 only)</option>
+                    <option value="B">B (4004 only)</option>
+                    <option value="BOTH">BOTH (shared)</option>
                   </select>
                 </div>
                 <div>
@@ -1117,14 +930,10 @@ export default function AdminPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Question Image <span className="text-gray-400 font-normal">(optional)</span></label>
                   <input type="file" accept="image/*"
                     onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
+                      const file = e.target.files?.[0]; if (!file) return;
                       setUploadingImage(true); setFormMessage("Uploading image...");
-                      try {
-                        const url = await uploadImage(file);
-                        setQuestionForm({ ...questionForm, questionImageUrl: url });
-                        setFormMessage("Image uploaded successfully!");
-                      } catch (err) { setFormError("Image upload failed: " + (err as Error).message); }
+                      try { const url = await uploadImage(file); setQuestionForm({ ...questionForm, questionImageUrl: url }); setFormMessage("Image uploaded successfully!"); }
+                      catch (err) { setFormError("Image upload failed: " + (err as Error).message); }
                       finally { setUploadingImage(false); }
                     }}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer" />
@@ -1145,12 +954,10 @@ export default function AdminPage() {
                 </div>
                 <div className="flex gap-6 flex-wrap">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={questionForm.isFree} onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" />
-                    Free question
+                    <input type="checkbox" checked={questionForm.isFree} onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" /> Free question
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={questionForm.isDailyEligible} onChange={(e) => setQuestionForm({ ...questionForm, isDailyEligible: e.target.checked })} className="w-4 h-4 accent-brand-600" />
-                    Daily challenge eligible
+                    <input type="checkbox" checked={questionForm.isDailyEligible} onChange={(e) => setQuestionForm({ ...questionForm, isDailyEligible: e.target.checked })} className="w-4 h-4 accent-brand-600" /> Daily challenge eligible
                   </label>
                 </div>
               </div>
@@ -1160,14 +967,13 @@ export default function AdminPage() {
                   {editingQuestionId ? "Update Question" : "Add Question"}
                 </button>
                 {editingQuestionId && (
-                  <button onClick={() => {
-                    setEditingQuestionId(null);
-                    setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "" });
-                  }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
+                  <button onClick={() => { setEditingQuestionId(null); setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B" }); }}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
                 )}
               </div>
             </div>
 
+            {/* Paper Questions List */}
             {questions.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4">📄 Paper Questions ({questions.length})</h2>
@@ -1180,6 +986,7 @@ export default function AdminPage() {
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">{q.difficulty}</span>
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{q.marks}m</span>
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{q.topic?.name}</span>
+                          <SyllabusBadge value={q.syllabus} />
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
@@ -1196,6 +1003,7 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* Practice-Only Questions */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">✏️ Practice-Only Questions ({practiceQuestions.length})</h2>
               {practiceQuestions.length === 0 ? (
@@ -1210,6 +1018,7 @@ export default function AdminPage() {
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded capitalize">{q.difficulty}</span>
                           <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">{q.marks}m</span>
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{q.topic?.name}</span>
+                          <SyllabusBadge value={q.syllabus} />
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
@@ -1227,7 +1036,9 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* LESSONS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            LESSONS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "lessons" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -1239,7 +1050,7 @@ export default function AdminPage() {
                     onChange={(e) => { setLessonForm({ ...lessonForm, topicId: e.target.value }); if (e.target.value) fetchLessons(e.target.value); }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
                     <option value="">Select a topic...</option>
-                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {topics.map((t: any) => <option key={t.id} value={t.id}>{t.name} [{t.syllabus || "BOTH"}]</option>)}
                   </select>
                 </div>
                 <div>
@@ -1258,6 +1069,15 @@ export default function AdminPage() {
                   <input type="number" value={lessonForm.estimatedMinutes} onChange={(e) => setLessonForm({ ...lessonForm, estimatedMinutes: parseInt(e.target.value) })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Syllabus</label>
+                  <select value={lessonForm.syllabus} onChange={(e) => setLessonForm({ ...lessonForm, syllabus: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500">
+                    <option value="A">A (4075 only)</option>
+                    <option value="B">B (4004 only)</option>
+                    <option value="BOTH">BOTH (shared)</option>
+                  </select>
+                </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">YouTube Video URL <span className="text-gray-400 font-normal">(optional)</span></label>
                   <input type="text" value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })}
@@ -1268,14 +1088,10 @@ export default function AdminPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Image <span className="text-gray-400 font-normal">(optional)</span></label>
                   <input type="file" accept="image/*"
                     onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
+                      const file = e.target.files?.[0]; if (!file) return;
                       setUploadingImage(true); setFormMessage("Uploading image...");
-                      try {
-                        const url = await uploadImage(file);
-                        setLessonForm({ ...lessonForm, imageUrl: url });
-                        setFormMessage("Image uploaded!");
-                      } catch (err) { setFormError("Upload failed."); }
+                      try { const url = await uploadImage(file); setLessonForm({ ...lessonForm, imageUrl: url }); setFormMessage("Image uploaded!"); }
+                      catch (err) { setFormError("Upload failed."); }
                       finally { setUploadingImage(false); }
                     }}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer" />
@@ -1289,7 +1105,7 @@ export default function AdminPage() {
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Lesson Content</label>
                   <textarea value={lessonForm.content} onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
-                    placeholder="Lesson content. Supports LaTeX math: $\frac{n}{2}$ and Markdown."
+                    placeholder="Lesson content. Supports LaTeX math and Markdown."
                     rows={8} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                   <LatexCheatSheet />
                 </div>
@@ -1306,10 +1122,8 @@ export default function AdminPage() {
                   {editingLessonId ? "Update Lesson" : "Add Lesson"}
                 </button>
                 {editingLessonId && (
-                  <button onClick={() => {
-                    setEditingLessonId(null);
-                    setLessonForm({ topicId: "", title: "", content: "", orderIndex: 1, isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "" });
-                  }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
+                  <button onClick={() => { setEditingLessonId(null); setLessonForm({ topicId: "", title: "", content: "", orderIndex: 1, isFree: false, estimatedMinutes: 10, videoUrl: "", geogebraUrl: "", imageUrl: "", syllabus: "B" }); }}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
                 )}
               </div>
             </div>
@@ -1328,6 +1142,7 @@ export default function AdminPage() {
                           {lesson.imageUrl && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">🖼️ Image</span>}
                           {lesson.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{lesson.topic?.name}</span>
+                          <SyllabusBadge value={lesson.syllabus} />
                         </div>
                         <p className="text-sm font-semibold text-gray-800">{lesson.title}</p>
                       </div>
@@ -1343,11 +1158,13 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* USERS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            USERS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <h2 className="text-lg font-bold text-gray-800">👥 All Users ({users.length})</h2>
+              <h2 className="text-lg font-bold text-gray-800">👥 All Users ({userTotal})</h2>
               <input type="text" value={userSearch}
                 onChange={(e) => { setUserSearch(e.target.value); fetchUsers(e.target.value, 0); }}
                 placeholder="Search by name or email..."
@@ -1361,6 +1178,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Email</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Grade</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Role</th>
+                    <th className="text-left py-2 text-gray-500 font-medium">Syllabus</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Premium</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
@@ -1375,12 +1193,11 @@ export default function AdminPage() {
                       <td className="py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${u.role === "admin" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>{u.role}</span>
                       </td>
+                      <td className="py-3"><SyllabusBadge value={u.activeSyllabus} /></td>
                       <td className="py-3">
                         {u.subscription?.status === "active" ? (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">⭐ {u.subscription.plan}</span>
-                        ) : (
-                          <span className="text-xs text-gray-400">Free</span>
-                        )}
+                        ) : <span className="text-xs text-gray-400">Free</span>}
                       </td>
                       <td className="py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
                       <td className="py-3">
@@ -1393,41 +1210,32 @@ export default function AdminPage() {
                             <option value="annual">Annual</option>
                           </select>
                           {u.role !== "admin" && (
-                            <button onClick={() => handleDeleteUser(u.id, u.name)}
-                              className="text-red-500 hover:text-red-700 text-xs font-semibold whitespace-nowrap">
-                              🗑 Delete
-                            </button>
+                            <button onClick={() => handleDeleteUser(u.id, u.name)} className="text-red-500 hover:text-red-700 text-xs font-semibold whitespace-nowrap">🗑 Delete</button>
                           )}
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {users.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">No users found</td></tr>}
+                  {users.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">No users found</td></tr>}
                 </tbody>
               </table>
             </div>
             {userTotalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">
-                  Showing {userPage * 50 + 1}–{Math.min((userPage + 1) * 50, userTotal)} of {userTotal} users
-                </p>
+                <p className="text-sm text-gray-500">Showing {userPage * 50 + 1}–{Math.min((userPage + 1) * 50, userTotal)} of {userTotal} users</p>
                 <div className="flex gap-2">
-                  <button onClick={() => fetchUsers(userSearch, userPage - 1)} disabled={userPage === 0}
-                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
-                    ← Previous
-                  </button>
+                  <button onClick={() => fetchUsers(userSearch, userPage - 1)} disabled={userPage === 0} className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">← Previous</button>
                   <span className="px-3 py-1 text-sm text-gray-600">Page {userPage + 1} of {userTotalPages}</span>
-                  <button onClick={() => fetchUsers(userSearch, userPage + 1)} disabled={userPage >= userTotalPages - 1}
-                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">
-                    Next →
-                  </button>
+                  <button onClick={() => fetchUsers(userSearch, userPage + 1)} disabled={userPage >= userTotalPages - 1} className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition">Next →</button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* SUBSCRIPTIONS TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            SUBSCRIPTIONS TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "subscriptions" && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
             <h2 className="text-lg font-bold text-gray-800 mb-4">💳 All Subscriptions ({subscriptions.length})</h2>
@@ -1456,9 +1264,7 @@ export default function AdminPage() {
                       <td className="py-3 text-gray-500">${s.amountUsd}</td>
                       <td className="py-3 text-gray-500">{new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                       <td className="py-3">
-                        {s.status === "active" && (
-                          <button onClick={() => handleCancelSubscription(s.userId)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Cancel</button>
-                        )}
+                        {s.status === "active" && <button onClick={() => handleCancelSubscription(s.userId)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Cancel</button>}
                       </td>
                     </tr>
                   ))}
@@ -1469,7 +1275,9 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* BADGES TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            BADGES TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "badges" && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -1488,7 +1296,6 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">🕐 Recent Badges Awarded</h2>
               {recentBadges.length === 0 ? (
@@ -1497,23 +1304,14 @@ export default function AdminPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-2 text-gray-500 font-medium">Student</th>
-                        <th className="text-left py-2 text-gray-500 font-medium">Email</th>
-                        <th className="text-left py-2 text-gray-500 font-medium">Badge</th>
-                        <th className="text-left py-2 text-gray-500 font-medium">Awarded</th>
-                      </tr>
+                      <tr className="border-b border-gray-100"><th className="text-left py-2 text-gray-500 font-medium">Student</th><th className="text-left py-2 text-gray-500 font-medium">Email</th><th className="text-left py-2 text-gray-500 font-medium">Badge</th><th className="text-left py-2 text-gray-500 font-medium">Awarded</th></tr>
                     </thead>
                     <tbody>
                       {recentBadges.map((b: any) => (
                         <tr key={b.id} className="border-b border-gray-50">
                           <td className="py-3 font-medium text-gray-800">{b.user?.name}</td>
                           <td className="py-3 text-gray-500">{b.user?.email}</td>
-                          <td className="py-3">
-                            <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-semibold capitalize">
-                              {b.badgeSlug.replace(/-/g, ' ')}
-                            </span>
-                          </td>
+                          <td className="py-3"><span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-semibold capitalize">{b.badgeSlug.replace(/-/g, ' ')}</span></td>
                           <td className="py-3 text-gray-500">{new Date(b.awardedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                         </tr>
                       ))}
@@ -1525,17 +1323,14 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* WHATSAPP TAB */}
+        {/* ═══════════════════════════════════════════════════════
+            WHATSAPP TAB
+            ═══════════════════════════════════════════════════════ */}
         {activeTab === "whatsapp" && (
           <div className="space-y-6">
-            {/* Generator */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-1">📱 Generate WhatsApp Channel Post</h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Generate a post for your WhatsApp Channel. Review, copy, and paste into WhatsApp.
-              </p>
-
-              {/* Content Type Selector */}
+              <p className="text-sm text-gray-500 mb-6">Generate a post for your WhatsApp Channel. Review, copy, and paste into WhatsApp.</p>
               <div className="flex flex-wrap gap-3 mb-6">
                 {[
                   { id: "question", emoji: "📐", label: "Can You Solve?" },
@@ -1544,84 +1339,37 @@ export default function AdminPage() {
                   { id: "motivation", emoji: "📅", label: "Motivation" },
                   { id: "leaderboard", emoji: "🏆", label: "Leaderboard" },
                 ].map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => { setWhatsappType(type.id); setWhatsappGenerated(null); }}
-                    className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition border ${
-                      whatsappType === type.id
-                        ? "bg-brand-700 text-white border-brand-700"
-                        : "bg-white text-gray-700 border-gray-200 hover:border-brand-300"
-                    }`}
-                  >
+                  <button key={type.id} onClick={() => { setWhatsappType(type.id); setWhatsappGenerated(null); }}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition border ${whatsappType === type.id ? "bg-brand-700 text-white border-brand-700" : "bg-white text-gray-700 border-gray-200 hover:border-brand-300"}`}>
                     {type.emoji} {type.label}
                   </button>
                 ))}
               </div>
-
-              <button
-                onClick={handleGenerateWhatsapp}
-                disabled={whatsappGenerating}
-                className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-3 rounded-xl font-semibold text-sm transition flex items-center gap-2"
-              >
-                {whatsappGenerating ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>🤖 Generate Post</>
-                )}
+              <button onClick={handleGenerateWhatsapp} disabled={whatsappGenerating}
+                className="bg-brand-700 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-3 rounded-xl font-semibold text-sm transition flex items-center gap-2">
+                {whatsappGenerating ? (<><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generating...</>) : (<>🤖 Generate Post</>)}
               </button>
-
-              {/* Generated Post */}
               {whatsappGenerated && (
                 <div className="mt-6 p-6 bg-green-50 rounded-2xl border border-green-200">
                   <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-bold text-green-800 flex items-center gap-2">
-                      ✅ Post Generated
-                    </span>
-                    <button
-                      onClick={handleGenerateWhatsapp}
-                      className="text-brand-600 hover:text-brand-800 text-sm font-semibold"
-                    >
-                      🔄 Regenerate
-                    </button>
+                    <span className="text-sm font-bold text-green-800 flex items-center gap-2">✅ Post Generated</span>
+                    <button onClick={handleGenerateWhatsapp} className="text-brand-600 hover:text-brand-800 text-sm font-semibold">🔄 Regenerate</button>
                   </div>
-
-                  {/* Preview card — simulates WhatsApp Channel look */}
                   <div className="bg-[#0b141a] rounded-xl p-5 mb-4">
                     <div className="flex items-start gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                        ZM
-                      </div>
-                      <div>
-                        <p className="text-[#06cf9c] font-semibold text-sm">ZimMaths Academy 📚</p>
-                        <p className="text-gray-400 text-xs">Just now</p>
-                      </div>
+                      <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">ZM</div>
+                      <div><p className="text-[#06cf9c] font-semibold text-sm">ZimMaths Academy 📚</p><p className="text-gray-400 text-xs">Just now</p></div>
                     </div>
-                    <div className="text-white text-sm whitespace-pre-wrap leading-relaxed">
-                      {whatsappGenerated.content}
-                    </div>
+                    <div className="text-white text-sm whitespace-pre-wrap leading-relaxed">{whatsappGenerated.content}</div>
                   </div>
-
-                  <button
-                    onClick={handleCopyWhatsapp}
-                    className={`w-full py-3 rounded-xl font-bold text-sm transition ${
-                      whatsappCopied
-                        ? "bg-green-600 text-white"
-                        : "bg-[#25D366] hover:bg-[#20bd5a] text-white"
-                    }`}
-                  >
+                  <button onClick={handleCopyWhatsapp}
+                    className={`w-full py-3 rounded-xl font-bold text-sm transition ${whatsappCopied ? "bg-green-600 text-white" : "bg-[#25D366] hover:bg-[#20bd5a] text-white"}`}>
                     {whatsappCopied ? "✅ Copied! Paste in WhatsApp Channel" : "📋 Copy & Open WhatsApp Channel"}
                   </button>
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    After copying, paste directly into your WhatsApp Channel announcement box
-                  </p>
+                  <p className="text-xs text-gray-400 text-center mt-2">After copying, paste directly into your WhatsApp Channel announcement box</p>
                 </div>
               )}
             </div>
-
-            {/* Post History */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">📋 Post History ({whatsappHistory.length})</h2>
               {whatsappHistory.length === 0 ? (
@@ -1632,30 +1380,10 @@ export default function AdminPage() {
                     <div key={post.id} className={`p-4 rounded-xl border ${post.posted ? "bg-gray-50 border-gray-200" : "bg-yellow-50 border-yellow-200"}`}>
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            post.contentType === "question" ? "bg-blue-100 text-blue-700" :
-                            post.contentType === "tip" ? "bg-purple-100 text-purple-700" :
-                            post.contentType === "fact" ? "bg-orange-100 text-orange-700" :
-                            post.contentType === "motivation" ? "bg-green-100 text-green-700" :
-                            "bg-yellow-100 text-yellow-700"
-                          }`}>
-                            {post.contentType}
-                          </span>
-                          {post.posted ? (
-                            <span className="text-xs text-green-600 font-semibold">✅ Posted {new Date(post.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
-                          ) : (
-                            <span className="text-xs text-yellow-600 font-semibold">⏳ Not posted</span>
-                          )}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${post.contentType === "question" ? "bg-blue-100 text-blue-700" : post.contentType === "tip" ? "bg-purple-100 text-purple-700" : post.contentType === "fact" ? "bg-orange-100 text-orange-700" : post.contentType === "motivation" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{post.contentType}</span>
+                          {post.posted ? <span className="text-xs text-green-600 font-semibold">✅ Posted {new Date(post.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : <span className="text-xs text-yellow-600 font-semibold">⏳ Not posted</span>}
                         </div>
-                        <button
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(post.content);
-                            alert("Copied to clipboard!");
-                          }}
-                          className="text-xs text-brand-600 hover:text-brand-800 font-semibold"
-                        >
-                          📋 Copy
-                        </button>
+                        <button onClick={async () => { await navigator.clipboard.writeText(post.content); alert("Copied to clipboard!"); }} className="text-xs text-brand-600 hover:text-brand-800 font-semibold">📋 Copy</button>
                       </div>
                       <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-3">{post.content}</p>
                     </div>
@@ -1663,46 +1391,21 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
-            {/* Posting Schedule Reference */}
             <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6">
               <h2 className="text-lg font-bold text-blue-800 mb-3">📅 Recommended Posting Schedule</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
-                  <span className="text-xl">📐</span>
-                  <div>
-                    <p className="font-semibold text-gray-800">Mon, Wed, Fri — 7pm</p>
-                    <p className="text-gray-500 text-xs">Can You Solve This?</p>
+                {[
+                  { emoji: "📐", day: "Mon, Wed, Fri — 7pm", desc: "Can You Solve This?" },
+                  { emoji: "💡", day: "Tuesday — 7pm", desc: "Exam Smart Tip" },
+                  { emoji: "🏆", day: "Thursday — 7pm", desc: "Student Success / Leaderboard" },
+                  { emoji: "🔍", day: "Saturday — 10am", desc: "Did You Know? / Maths in Real Life" },
+                  { emoji: "📅", day: "Sunday — 7pm", desc: "Week Ahead + Motivation + Stats" },
+                ].map((s) => (
+                  <div key={s.day} className="flex items-center gap-3 bg-white rounded-xl p-3">
+                    <span className="text-xl">{s.emoji}</span>
+                    <div><p className="font-semibold text-gray-800">{s.day}</p><p className="text-gray-500 text-xs">{s.desc}</p></div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
-                  <span className="text-xl">💡</span>
-                  <div>
-                    <p className="font-semibold text-gray-800">Tuesday — 7pm</p>
-                    <p className="text-gray-500 text-xs">Exam Smart Tip</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
-                  <span className="text-xl">🏆</span>
-                  <div>
-                    <p className="font-semibold text-gray-800">Thursday — 7pm</p>
-                    <p className="text-gray-500 text-xs">Student Success / Leaderboard</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white rounded-xl p-3">
-                  <span className="text-xl">🔍</span>
-                  <div>
-                    <p className="font-semibold text-gray-800">Saturday — 10am</p>
-                    <p className="text-gray-500 text-xs">Did You Know? / Maths in Real Life</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white rounded-xl p-3 md:col-span-2">
-                  <span className="text-xl">📅</span>
-                  <div>
-                    <p className="font-semibold text-gray-800">Sunday — 7pm</p>
-                    <p className="text-gray-500 text-xs">Week Ahead + Motivation + Stats</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
