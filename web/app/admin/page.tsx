@@ -992,7 +992,7 @@ export default function AdminPage() {
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.questionImageUrl && (
-                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 rounded-lg border border-gray-200 object-contain" />
+                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
                         )}
                         {q.correctAnswer && <div className="text-xs text-green-600 mt-1">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
                       </div>
@@ -1027,7 +1027,7 @@ export default function AdminPage() {
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.questionImageUrl && (
-                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 rounded-lg border border-gray-200 object-contain" />
+                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
                         )}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
