@@ -991,6 +991,9 @@ export default function AdminPage() {
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        {q.questionImageUrl && (
+                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 rounded-lg border border-gray-200 object-contain" />
+                        )}
                         {q.correctAnswer && <div className="text-xs text-green-600 mt-1">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
@@ -1023,6 +1026,9 @@ export default function AdminPage() {
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
                         <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        {q.questionImageUrl && (
+                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 rounded-lg border border-gray-200 object-contain" />
+                        )}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
