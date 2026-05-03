@@ -24,6 +24,30 @@ const plans: Record<string, { label: string; price: number; days: number }> = {
   annual: { label: "1 Year", price: 45, days: 365 },
 };
 
+// ── Verify Paynow webhook hash ─────────────────────────────────
+function verifyPaynowHash(body: any): boolean {
+  const receivedHash = body.hash || "";
+  if (!receivedHash) {
+    console.warn("Paynow webhook: No hash in request body");
+    return false;
+  }
+
+  const reference = body.reference || "";
+  const amount = body.amount || "";
+  const status = body.status || "";
+  const integrationKey = process.env.PAYNOW_INTEGRATION_KEY || "";
+
+  const crypto = require("crypto");
+  const hashString = `${reference}${amount}${status}${integrationKey}`;
+  const computedHash = crypto.createHash("sha512").update(hashString).digest("hex").toUpperCase();
+
+  const valid = computedHash === receivedHash.toUpperCase();
+  if (!valid) {
+    console.warn("Paynow webhook: Hash verification failed");
+  }
+  return valid;
+}
+
 // ── DB-based lock — survives restarts & multiple instances ────
 async function acquireLock(userId: string): Promise<boolean> {
   const tenSecondsAgo = new Date(Date.now() - 10000);
@@ -150,7 +174,7 @@ router.get("/poll-paynow", async (req: AuthRequest, res: Response) => {
     }
 
     const status = await paynow.pollTransaction(String(pollUrl));
-    console.log("Paynow poll result:", status);
+    console.log("Paynow poll result:", { paid: status.paid, status: status.status });
 
     if (status.paid || status.status?.toLowerCase() === "paid") {
       const subscription = await prisma.subscription.findFirst({
@@ -305,7 +329,7 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
         instructions: getMobileInstructions(paymentMethod, phone, planDetails.price),
       });
     } else {
-      console.error("Paynow error:", response);
+      console.error("Paynow initiate error:", response);
       return res.status(400).json({
         success: false,
         error: response?.error || "Payment initiation failed. Please try again.",
@@ -320,6 +344,10 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
 // POST /api/subscriptions/paynow-webhook
 router.post("/paynow-webhook", async (req: Request, res: Response) => {
   try {
+    // Verify this request came from Paynow
+    if (!verifyPaynowHash(req.body)) {
+      return res.status(403).send("Invalid signature");
+    }
     console.log("Paynow webhook received:", { ref: req.body.reference, status: req.body.status });
 
     const reference = String(req.body.reference || "");
@@ -357,6 +385,10 @@ router.post("/paynow-webhook", async (req: Request, res: Response) => {
 // POST /api/subscriptions/paynow-callback (alias)
 router.post("/paynow-callback", async (req: Request, res: Response) => {
   try {
+    // Verify this request came from Paynow
+    if (!verifyPaynowHash(req.body)) {
+      return res.status(403).send("Invalid signature");
+    }
     console.log("Paynow callback received:", { ref: req.body?.reference });
 
     const reference = String(req.body.reference || "");
