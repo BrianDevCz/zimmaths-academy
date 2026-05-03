@@ -921,27 +921,46 @@ export default function AdminPage() {
                 {questionForm.questionText && (
                   <div className="md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Preview</label>
-                    <div className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 text-gray-800">
+                    <div className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 text-gray-800 whitespace-pre-line">
                       <MathContent>{questionForm.questionText}</MathContent>
                     </div>
                   </div>
                 )}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Question Image <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Question Images <span className="text-gray-400 font-normal">(optional — upload multiple for multi-part questions)</span></label>
                   <input type="file" accept="image/*"
                     onChange={async (e) => {
                       const file = e.target.files?.[0]; if (!file) return;
                       setUploadingImage(true); setFormMessage("Uploading image...");
-                      try { const url = await uploadImage(file); setQuestionForm({ ...questionForm, questionImageUrl: url }); setFormMessage("Image uploaded successfully!"); }
+                      try {
+                        const url = await uploadImage(file);
+                        const existing = questionForm.questionImageUrl;
+                        const newUrl = existing ? `${existing},${url}` : url;
+                        setQuestionForm({ ...questionForm, questionImageUrl: newUrl });
+                        setFormMessage("Image uploaded successfully!");
+                      }
                       catch (err) { setFormError("Image upload failed: " + (err as Error).message); }
                       finally { setUploadingImage(false); }
                     }}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer" />
                   {uploadingImage && <div className="mt-2 text-xs text-brand-600">Uploading...</div>}
                   {questionForm.questionImageUrl && (
-                    <div className="mt-3">
-                      <img src={questionForm.questionImageUrl} alt="Question diagram" className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain" />
-                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })} className="mt-2 text-xs text-red-500 hover:text-red-700">Remove image</button>
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap gap-3">
+                        {questionForm.questionImageUrl.split(",").map((url: string, i: number) => (
+                          <div key={i} className="relative group">
+                            <img src={url.trim()} alt={`Question diagram ${i + 1}`} className="max-w-xs max-h-48 rounded-lg border border-gray-200 object-contain" />
+                            <button
+                              onClick={() => {
+                                const urls = questionForm.questionImageUrl.split(",").map((u: string) => u.trim()).filter((_: string, idx: number) => idx !== i);
+                                setQuestionForm({ ...questionForm, questionImageUrl: urls.join(",") });
+                              }}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition">×</button>
+                            <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">Image {i + 1}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setQuestionForm({ ...questionForm, questionImageUrl: "" })} className="text-xs text-red-500 hover:text-red-700">Remove all images</button>
                     </div>
                   )}
                 </div>
@@ -990,11 +1009,15 @@ export default function AdminPage() {
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
-                        <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        <div className="text-sm text-gray-800 mt-3 whitespace-pre-line"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.questionImageUrl && (
-                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {q.questionImageUrl.split(",").map((url: string, i: number) => (
+                              <img key={i} src={url.trim()} alt={`Question diagram ${i + 1}`} className="max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
+                            ))}
+                          </div>
                         )}
-                        {q.correctAnswer && <div className="text-xs text-green-600 mt-1">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
+                        {q.correctAnswer && <div className="text-xs text-green-600 mt-2 whitespace-pre-line">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
@@ -1025,10 +1048,15 @@ export default function AdminPage() {
                           {q.isFree && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free</span>}
                           {q.isDailyEligible && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">Daily</span>}
                         </div>
-                        <div className="text-sm text-gray-800"><MathContent>{q.questionText || ""}</MathContent></div>
+                        <div className="text-sm text-gray-800 mt-3 whitespace-pre-line"><MathContent>{q.questionText || ""}</MathContent></div>
                         {q.questionImageUrl && (
-                          <img src={q.questionImageUrl} alt="Question diagram" className="mt-2 max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {q.questionImageUrl.split(",").map((url: string, i: number) => (
+                              <img key={i} src={url.trim()} alt={`Question diagram ${i + 1}`} className="max-w-full max-h-48 min-h-[100px] rounded-lg border border-gray-200 object-contain" />
+                            ))}
+                          </div>
                         )}
+                        {q.correctAnswer && <div className="text-xs text-green-600 mt-2 whitespace-pre-line">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
