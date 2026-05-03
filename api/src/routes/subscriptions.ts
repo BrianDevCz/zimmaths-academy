@@ -290,7 +290,7 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
       response = await paynow.send(payment);
     }
 
-    console.log("Paynow response:", response);
+    console.log("Paynow response status:", response?.status);
 
     if (response && response.success) {
       return res.status(200).json({
@@ -320,7 +320,7 @@ router.post("/initiate-paynow", async (req: AuthRequest, res: Response) => {
 // POST /api/subscriptions/paynow-webhook
 router.post("/paynow-webhook", async (req: Request, res: Response) => {
   try {
-    console.log("Paynow webhook received:", req.body);
+    console.log("Paynow webhook received:", { ref: req.body.reference, status: req.body.status });
 
     const reference = String(req.body.reference || "");
     const paynowreference = String(req.body.paynowreference || "");
@@ -357,7 +357,7 @@ router.post("/paynow-webhook", async (req: Request, res: Response) => {
 // POST /api/subscriptions/paynow-callback (alias)
 router.post("/paynow-callback", async (req: Request, res: Response) => {
   try {
-    console.log("Paynow callback received:", req.body);
+    console.log("Paynow callback received:", { ref: req.body?.reference });
 
     const reference = String(req.body.reference || "");
     const paynowreference = String(req.body.paynowreference || "");

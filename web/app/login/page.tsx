@@ -4,6 +4,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useAuth } from "../context/AuthContext";
 
+function getSafeRedirect(redirect: string | null): string {
+  if (!redirect) return "/";
+  if (redirect.startsWith("/") && !redirect.startsWith("//")) {
+    return redirect;
+  }
+  return "/";
+}
+
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -13,7 +21,7 @@ function LoginPageInner() {
 
   useEffect(() => {
     if (user) {
-      const redirectTo = searchParams.get("redirect") || "/";
+      const redirectTo = getSafeRedirect(searchParams.get("redirect"));
       router.push(redirectTo);
     }
   }, [user]);
@@ -33,8 +41,8 @@ function LoginPageInner() {
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
-    const redirectTo = searchParams.get("redirect") || "/";
-    await signIn("google", { callbackUrl: `/auth/google-callback?redirect=${redirectTo}` });
+    const redirectTo = getSafeRedirect(searchParams.get("redirect"));
+    await signIn("google", { callbackUrl: `/auth/google-callback?redirect=${encodeURIComponent(redirectTo)}` });
   };
 
   const handleSubmit = async () => {
@@ -65,7 +73,7 @@ function LoginPageInner() {
 
       if (data.success) {
         login(data.token, data.user);
-        const redirectTo = searchParams.get("redirect") || "/";
+        const redirectTo = getSafeRedirect(searchParams.get("redirect"));
         router.push(redirectTo);
       } else if (data.needsVerification) {
         setNeedsVerification(true);

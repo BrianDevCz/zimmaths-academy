@@ -231,7 +231,7 @@ router.post("/login", async (req: Request, res: Response) => {
     const badgesAwarded = await checkBadgesAfterLogin(user.id, newStreak);
 
     if (badgesAwarded.length > 0) {
-      console.log(`Badges awarded on login for ${user.email}:`, badgesAwarded);
+      console.log(`Badges awarded on login:`, badgesAwarded);
     }
 
     const token = jwt.sign(
