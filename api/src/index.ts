@@ -88,12 +88,13 @@ const allowedOrigins = [
   "http://localhost:3000",
   "https://zimmaths.com",
   "https://www.zimmaths.com",
+  "https://zimmaths-academy-production.up.railway.app",
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin && process.env.NODE_ENV !== "production") return callback(null, true);
+    // Allow requests with no origin (server-to-server, mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin as string)) return callback(null, true);
     callback(new Error("Not allowed by CORS"));
   },
