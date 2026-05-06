@@ -63,8 +63,16 @@ router.get('/', async (req: Request, res: Response) => {
 // GET single paper with questions
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const paper = await prisma.paper.findUnique({
-      where: { id: String(req.params.id) },
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
+    const paperId = String(req.params.id);
+
+    // Use findFirst with syllabus filter + id, since findUnique doesn't support filters
+    const paper = await prisma.paper.findFirst({
+      where: {
+        id: paperId,
+        ...syllabusFilter,
+      },
       include: {
         questions: {
           orderBy: { questionNumber: 'asc' },

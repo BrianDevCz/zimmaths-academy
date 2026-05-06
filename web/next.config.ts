@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
               // Frames — YouTube, GeoGebra, Vimeo
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.geogebra.org https://player.vimeo.com",
               // API connections
-              "connect-src 'self' https://zimmaths-academy-production.up.railway.app https://upload.uploadcare.com https://api.anthropic.com https://openrouter.ai https://cloudflareinsights.com",
+              "connect-src 'self' http://localhost:5000 https://zimmaths-academy-production.up.railway.app https://upload.uploadcare.com https://api.anthropic.com https://openrouter.ai https://cloudflareinsights.com",
               // Media (camera/microphone for OCR)
               "media-src 'self' blob:",
               // Workers (for KaTeX)
