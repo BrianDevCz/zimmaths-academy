@@ -5,6 +5,7 @@ import { awardPoints } from "../points";
 import { markAnswer } from "../marking";
 import { markAnswerWithAI, extractTextFromImage } from "../aiMarking";
 import { checkBadgesAfterPracticeTest } from '../badges';
+import { buildSyllabusFilter } from "../middleware/syllabusFilter";
 
 const router = Router();
 
@@ -12,7 +13,10 @@ const router = Router();
 router.post("/generate", async (req: AuthRequest, res: Response) => {
   try {
     const { topicSlug, difficulty, count, excludeIds } = req.body;
-    const where: any = {};
+
+    // Build syllabus filter based on user's active syllabus
+    const syllabusFilter = await buildSyllabusFilter(req.userId);
+    const where: any = { ...syllabusFilter };
 
     if (topicSlug && topicSlug !== "mixed") {
       const topic = await prisma.topic.findUnique({ where: { slug: topicSlug } });

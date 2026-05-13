@@ -139,6 +139,7 @@ model Question {
   questionNumber   Int
   questionText     String
   questionImageUrl String?
+  solutionImageUrl String?          // 👈 ADDED THIS LINE
   marks            Int
   difficulty       String           @default("medium")
   topicId          String

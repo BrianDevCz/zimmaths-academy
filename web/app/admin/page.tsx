@@ -10,6 +10,11 @@ import LatexCheatSheet from "../components/LatexCheatSheet";
 const UPLOADCARE_PUBLIC_KEY = "7e4e42ae6a4d7550d670";
 const UPLOADCARE_CDN = "https://d9s36eq1lg.ucarecd.net";
 
+interface SolutionImage {
+  url: string;
+  label: string;
+}
+
 async function uploadImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("UPLOADCARE_PUB_KEY", UPLOADCARE_PUBLIC_KEY);
@@ -21,6 +26,18 @@ async function uploadImage(file: File): Promise<string> {
   if (!data.file) throw new Error("No file ID returned from Uploadcare");
   return `${UPLOADCARE_CDN}/${data.file}/`;
 }
+
+const parseSolutionImages = (raw: string): SolutionImage[] => {
+  if (!raw) return [];
+  return raw.split(",").map((entry) => {
+    const [url, ...labelParts] = entry.split("|");
+    return { url: url.trim(), label: labelParts.join("|").trim() || `Image` };
+  });
+};
+
+const stringifySolutionImages = (images: SolutionImage[]): string => {
+  return images.map((img) => `${img.url}|${img.label}`).join(",");
+};
 
 export default function AdminPage() {
   const { token, user, loading: authLoading } = useAuth();
@@ -74,6 +91,7 @@ export default function AdminPage() {
     paperId: "", topicId: "", questionNumber: 1, questionText: "",
     marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "",
     isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B",
+    solutionImages: [] as SolutionImage[],
   });
 
   const [lessonForm, setLessonForm] = useState({
@@ -321,14 +339,20 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/questions`, {
         method: "POST", headers: getHeaders(),
-        body: JSON.stringify({ ...questionForm, paperId: questionForm.paperId || null, questionNumber: parseInt(String(questionForm.questionNumber)), marks: parseInt(String(questionForm.marks)) }),
+        body: JSON.stringify({ 
+          ...questionForm, 
+          paperId: questionForm.paperId || null, 
+          questionNumber: parseInt(String(questionForm.questionNumber)), 
+          marks: parseInt(String(questionForm.marks)),
+          solutionImageUrl: stringifySolutionImages(questionForm.solutionImages)
+        }),
       });
       const data = await res.json();
       if (data.success) {
         setFormMessage("Question added successfully!");
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
         fetchPracticeQuestions();
-        setQuestionForm((prev) => ({ ...prev, questionNumber: prev.questionNumber + 1, questionText: "", correctAnswer: "", solutionText: "", questionImageUrl: "" }));
+        setQuestionForm((prev) => ({ ...prev, questionNumber: prev.questionNumber + 1, questionText: "", correctAnswer: "", solutionText: "", questionImageUrl: "", solutionImages: [] }));
       } else { setFormError(data.error); }
     } catch { setFormError("Failed to add question."); }
   };
@@ -341,6 +365,7 @@ export default function AdminPage() {
       correctAnswer: q.correctAnswer || "", solutionText: q.solutionText || "",
       isFree: q.isFree, isDailyEligible: q.isDailyEligible, questionImageUrl: q.questionImageUrl || "",
       syllabus: q.syllabus || "B",
+      solutionImages: parseSolutionImages(q.solutionImageUrl || ""),
     });
     if (q.paperId) { setSelectedPaperId(q.paperId); fetchQuestions(q.paperId); }
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -351,12 +376,18 @@ export default function AdminPage() {
     try {
       const res = await fetch(`${API_URL}/api/admin/questions/${editingQuestionId}`, {
         method: "PUT", headers: getHeaders(),
-        body: JSON.stringify({ ...questionForm, paperId: questionForm.paperId || null, questionNumber: parseInt(String(questionForm.questionNumber)), marks: parseInt(String(questionForm.marks)) }),
+        body: JSON.stringify({ 
+          ...questionForm, 
+          paperId: questionForm.paperId || null, 
+          questionNumber: parseInt(String(questionForm.questionNumber)), 
+          marks: parseInt(String(questionForm.marks)),
+          solutionImageUrl: stringifySolutionImages(questionForm.solutionImages)
+        }),
       });
       const data = await res.json();
       if (data.success) {
         setFormMessage("Question updated successfully!"); setEditingQuestionId(null);
-        setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B" });
+        setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B", solutionImages: [] });
         if (questionForm.paperId) fetchQuestions(questionForm.paperId);
         fetchPracticeQuestions();
       } else { setFormError(data.error); }
@@ -421,7 +452,7 @@ export default function AdminPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = ["topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle,syllabus", 'general-arithmetic,1,"Simplify $\\frac{3}{4} + \\frac{1}{2}$",2,easy,"$\\frac{5}{4}$","Convert to common denominator",true,true,,,BOTH'].join("\n");
+    const csv = ["topicSlug,questionNumber,questionText,marks,difficulty,correctAnswer,solutionText,isFree,isDailyEligible,questionImageUrl,paperTitle,syllabus", 'general-arithmetic,1,"Simplify $\\frac{3}{4} + \\frac{1}{2}$",2,easy,"$\\frac{5}{4}$","Convert to common denominator",true,true,,,BOTH'  ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "zimmaths_questions_template.csv"; a.click();
   };
 
@@ -453,6 +484,28 @@ export default function AdminPage() {
   const SyllabusBadge = ({ value }: { value: string }) => {
     const cls = value === "A" ? "bg-blue-50 text-blue-700" : value === "BOTH" ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600";
     return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{value || "B"}</span>;
+  };
+
+  // ── Solution image display helper ───────────────────────────
+
+  const SolutionImageDisplay = ({ raw }: { raw: string }) => {
+    const images = parseSolutionImages(raw);
+    if (images.length === 0) return null;
+    return (
+      <div className="mt-3 space-y-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Solution Images</p>
+        <div className="flex flex-wrap gap-3">
+          {images.map((img: SolutionImage, i: number) => (
+            <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-2">
+              {img.label && (
+                <span className="block text-xs font-semibold text-brand-700 mb-1 px-1">{img.label}</span>
+              )}
+              <img src={img.url} alt={`Solution ${img.label || i + 1}`} className="max-w-full max-h-48 min-h-[80px] rounded-lg border border-gray-100 object-contain" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // ── Tabs ─────────────────────────────────────────────────────
@@ -971,6 +1024,65 @@ export default function AdminPage() {
                     placeholder="Enter the full solution with working..."
                     rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 resize-none font-mono" />
                 </div>
+                {questionForm.solutionText && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Solution Preview</label>
+                    <div className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 text-gray-800 whitespace-pre-line">
+                      <MathContent>{questionForm.solutionText}</MathContent>
+                    </div>
+                  </div>
+                )}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Solution Images <span className="text-gray-400 font-normal">(optional — upload graphs, diagrams, or worked solutions for specific parts)</span>
+                  </label>
+                  <input type="file" accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      setUploadingImage(true); setFormMessage("Uploading solution image...");
+                      try {
+                        const url = await uploadImage(file);
+                        const newImage: SolutionImage = { url, label: "" };
+                        setQuestionForm(prev => ({ ...prev, solutionImages: [...prev.solutionImages, newImage] }));
+                        setFormMessage("Solution image uploaded! Add a part label below.");
+                      }
+                      catch (err) { setFormError("Solution image upload failed: " + (err as Error).message); }
+                      finally { setUploadingImage(false); }
+                    }}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer" />
+                  {uploadingImage && <div className="mt-2 text-xs text-brand-600">Uploading...</div>}
+                  {questionForm.solutionImages.length > 0 && (
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap gap-4">
+                        {questionForm.solutionImages.map((img: SolutionImage, i: number) => (
+                          <div key={i} className="relative group bg-gray-50 rounded-xl border border-gray-200 p-3">
+                            <img src={img.url} alt={`Solution ${img.label || i + 1}`} className="max-w-xs max-h-48 rounded-lg border border-gray-100 object-contain mb-2" />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={img.label}
+                                onChange={(e) => {
+                                  const updated = [...questionForm.solutionImages];
+                                  updated[i] = { ...img, label: e.target.value };
+                                  setQuestionForm({ ...questionForm, solutionImages: updated });
+                                }}
+                                placeholder="e.g. Part (a), Diagram, Step 2..."
+                                className="flex-1 min-w-[140px] border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-brand-500"
+                              />
+                              <button
+                                onClick={() => {
+                                  const updated = questionForm.solutionImages.filter((_: SolutionImage, idx: number) => idx !== i);
+                                  setQuestionForm({ ...questionForm, solutionImages: updated });
+                                }}
+                                className="bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center transition">×</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setQuestionForm({ ...questionForm, solutionImages: [] })} className="text-xs text-red-500 hover:text-red-700">Remove all solution images</button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-6 flex-wrap">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input type="checkbox" checked={questionForm.isFree} onChange={(e) => setQuestionForm({ ...questionForm, isFree: e.target.checked })} className="w-4 h-4 accent-brand-600" /> Free question
@@ -986,7 +1098,7 @@ export default function AdminPage() {
                   {editingQuestionId ? "Update Question" : "Add Question"}
                 </button>
                 {editingQuestionId && (
-                  <button onClick={() => { setEditingQuestionId(null); setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B" }); }}
+                  <button onClick={() => { setEditingQuestionId(null); setQuestionForm({ paperId: "", topicId: "", questionNumber: 1, questionText: "", marks: 1, difficulty: "medium", correctAnswer: "", solutionText: "", isFree: false, isDailyEligible: false, questionImageUrl: "", syllabus: "B", solutionImages: [] }); }}
                     className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-semibold text-sm transition">Cancel</button>
                 )}
               </div>
@@ -1018,6 +1130,7 @@ export default function AdminPage() {
                           </div>
                         )}
                         {q.correctAnswer && <div className="text-xs text-green-600 mt-2 whitespace-pre-line">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
+                        {q.solutionImageUrl && <SolutionImageDisplay raw={q.solutionImageUrl} />}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>
@@ -1057,6 +1170,7 @@ export default function AdminPage() {
                           </div>
                         )}
                         {q.correctAnswer && <div className="text-xs text-green-600 mt-2 whitespace-pre-line">Answer: <MathContent>{q.correctAnswer}</MathContent></div>}
+                        {q.solutionImageUrl && <SolutionImageDisplay raw={q.solutionImageUrl} />}
                       </div>
                       <div className="flex flex-col gap-1 flex-shrink-0">
                         <button onClick={() => handleEditQuestion(q)} className="text-brand-600 hover:text-brand-800 text-xs font-semibold">Edit</button>

@@ -7,6 +7,47 @@ import BookmarkButton from "@/app/components/BookmarkButton";
 import { API_URL } from "@/app/lib/api";
 import Link from "next/link";
 
+// Solution Image Parser and Display Component
+interface SolutionImage {
+  url: string;
+  label: string;
+}
+
+const parseSolutionImages = (raw: string | null | undefined): SolutionImage[] => {
+  if (!raw) return [];
+  return raw.split(",").map((entry) => {
+    const [url, ...labelParts] = entry.split("|");
+    return { url: url.trim(), label: labelParts.join("|").trim() || "" };
+  });
+};
+
+const SolutionImageDisplay = ({ raw }: { raw: string | null | undefined }) => {
+  const images = parseSolutionImages(raw);
+  if (images.length === 0) return null;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <h3 className="text-sm font-semibold text-brand-700 mb-2">Solution Diagrams</h3>
+      <div className="flex flex-wrap gap-4">
+        {images.map((img, i) => (
+          <div key={i} className="bg-gray-50 rounded-xl border border-gray-200 p-3">
+            {img.label && (
+              <span className="block text-xs font-semibold text-brand-700 mb-2 px-1">
+                {img.label}
+              </span>
+            )}
+            <img
+              src={img.url}
+              alt={`Solution ${img.label || i + 1}`}
+              className="max-w-full max-h-64 rounded-lg object-contain"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function QuestionPage() {
   const { id, questionId } = useParams<{ id: string; questionId: string }>();
   const { token, loading: authLoading, isPremium } = useAuth();
@@ -131,6 +172,9 @@ export default function QuestionPage() {
                   </div>
                 </div>
               )}
+              {/* 👇 ADDED: Solution Images Display */}
+              <SolutionImageDisplay raw={question.solutionImageUrl} />
+              {/* 👆 END ADDED */}
               <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-100">
                 <h3 className="text-sm font-semibold text-yellow-700 mb-1">Marking Scheme</h3>
                 <p className="text-yellow-800 text-sm">

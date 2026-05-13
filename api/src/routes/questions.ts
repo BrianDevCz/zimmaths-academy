@@ -111,8 +111,14 @@ router.get("/search", async (req: any, res: Response) => {
 // GET single question by ID — AUTH OPTIONAL
 router.get("/:id", async (req: AuthRequest, res: Response) => {
   try {
-    const question = await prisma.question.findUnique({
-      where: { id: String(req.params.id) },
+    const userId = getUserId(req);
+    const syllabusFilter = await buildSyllabusFilter(userId || undefined);
+
+    const question = await prisma.question.findFirst({
+      where: {
+        id: String(req.params.id),
+        ...syllabusFilter,
+      },
       include: {
         topic: { select: { name: true, slug: true, icon: true } },
         paper: { select: { title: true, year: true, session: true, paperNumber: true } },
@@ -145,6 +151,7 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
       solutionSteps: canViewSolution ? question.solutionSteps : null,
       solutionText: canViewSolution ? question.solutionText : null,
       correctAnswer: canViewSolution ? (question as any).correctAnswer : null,
+      solutionImageUrl: canViewSolution ? (question as any).solutionImageUrl : null,  // ← ADDED
       locked: !canViewSolution,
       upgradeUrl: !canViewSolution ? "/upgrade" : null,
     };

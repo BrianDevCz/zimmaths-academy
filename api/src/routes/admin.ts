@@ -227,6 +227,7 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
       solutionText: z.string().optional(),
       solutionSteps: z.any().optional(),
       questionImageUrl: z.string().optional(),
+      solutionImageUrl: z.string().optional(),
       isFree: z.boolean().default(false),
       isDailyEligible: z.boolean().default(false),
       syllabus: z.enum(["A", "B", "BOTH"]).default("B"),
@@ -281,6 +282,7 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
             difficulty: q.difficulty || "medium",
             correctAnswer: q.correctAnswer || "",
             solutionText: q.solutionText || "",
+            solutionImageUrl: q.solutionImageUrl || null,
             isFree: q.isFree === "true" || q.isFree === true,
             isDailyEligible: q.isDailyEligible === "true" || q.isDailyEligible === true,
             questionImageUrl: q.questionImageUrl || null,
@@ -304,7 +306,10 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
 // PUT /api/admin/questions/:id
 router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
   try {
-    const question = await prisma.question.update({ where: { id: String(req.params.id) }, data: req.body });
+    const question = await prisma.question.update({ 
+      where: { id: String(req.params.id) }, 
+      data: req.body 
+    });
     return res.status(200).json({ success: true, data: question });
   } catch (error) {
     console.error("Admin update question error:", error);
