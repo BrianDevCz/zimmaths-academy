@@ -303,12 +303,32 @@ router.post("/questions/import", async (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT /api/admin/questions/:id
+// PUT /api/admin/questions/:id - FIXED
 router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
   try {
+    const { 
+      paperId, topicId, questionNumber, questionText, marks, difficulty,
+      correctAnswer, solutionText, questionImageUrl, solutionImageUrl,
+      isFree, isDailyEligible, syllabus
+    } = req.body;
+    
     const question = await prisma.question.update({ 
       where: { id: String(req.params.id) }, 
-      data: req.body 
+      data: {
+        paperId: paperId || null,
+        topicId,
+        questionNumber: parseInt(questionNumber),
+        questionText,
+        marks: parseInt(marks),
+        difficulty,
+        correctAnswer: correctAnswer || null,
+        solutionText: solutionText || null,
+        questionImageUrl: questionImageUrl || null,
+        solutionImageUrl: solutionImageUrl || null,
+        isFree: isFree ?? false,
+        isDailyEligible: isDailyEligible ?? false,
+        syllabus: syllabus || "B",
+      }
     });
     return res.status(200).json({ success: true, data: question });
   } catch (error) {
