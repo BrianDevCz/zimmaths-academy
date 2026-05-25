@@ -36,11 +36,30 @@ export default function MathContent({ children }: { children: string }) {
   };
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm as any, remarkMath as any]}
-      rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
-    >
-      {processContent(children)}
-    </ReactMarkdown>
+    <div className="math-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm as any, remarkMath as any]}
+        rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
+        components={{
+          table: ({ children, ...props }: any) => (
+            <table {...props} className="border-collapse border border-gray-400 my-4">
+              {children}
+            </table>
+          ),
+          th: ({ children, ...props }: any) => (
+            <th {...props} className="border border-gray-400 px-3 py-2 bg-gray-100">
+              {children}
+            </th>
+          ),
+          td: ({ children, ...props }: any) => (
+            <td {...props} className="border border-gray-400 px-3 py-2">
+              {children}
+            </td>
+          ),
+        }}
+      >
+        {processContent(children)}
+      </ReactMarkdown>
+    </div>
   );
 }
