@@ -36,25 +36,35 @@ export default function MathContent({ children }: { children: string }) {
   };
 
   return (
-    <div className="math-content">
+    <div className="math-content prose max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm as any, remarkMath as any]}
         rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
         components={{
           table: ({ children, ...props }: any) => (
-            <table {...props} className="border-collapse border border-gray-400 my-4">
+            <table {...props} className="border-collapse border border-gray-300 my-4 w-full">
               {children}
             </table>
           ),
+          thead: ({ children, ...props }: any) => (
+            <thead {...props} className="bg-gray-100">
+              {children}
+            </thead>
+          ),
           th: ({ children, ...props }: any) => (
-            <th {...props} className="border border-gray-400 px-3 py-2 bg-gray-100">
+            <th {...props} className="border border-gray-300 px-4 py-2 text-left font-semibold">
               {children}
             </th>
           ),
           td: ({ children, ...props }: any) => (
-            <td {...props} className="border border-gray-400 px-3 py-2">
+            <td {...props} className="border border-gray-300 px-4 py-2">
               {children}
             </td>
+          ),
+          tr: ({ children, ...props }: any) => (
+            <tr {...props} className="even:bg-gray-50">
+              {children}
+            </tr>
           ),
         }}
       >
