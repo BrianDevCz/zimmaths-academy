@@ -12,8 +12,11 @@ export default function MathContent({ children }: { children: string }) {
   const processContent = (content: string) => {
     if (!content) return '';
 
-    // Decode HTML entities first
-    let processed = content
+    // Step 1: Decode escaped newlines (from CSV import)
+    let processed = content.replace(/\\n/g, '\n');
+
+    // Step 2: Decode HTML entities
+    processed = processed
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
@@ -23,36 +26,19 @@ export default function MathContent({ children }: { children: string }) {
       .replace(/&ge;/g, '\\geq')
       .replace(/&ne;/g, '\\neq');
 
-    // Convert \\(...\\) to $...$ (inline math)
+    // Step 3: Convert \\(...\\) to $...$ (inline math)
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
 
-    // Convert \\[...\\] to $$...$$ (display math)
+    // Step 4: Convert \\[...\\] to $$...$$ (display math)
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
-
-    // Ensure \\boxed{} works by making sure it's inside math mode
-    // If \\boxed appears outside $...$, wrap it in $$
-    processed = processed.replace(/(?<!\$)(\\boxed\{[^}]+\})(?!\$)/g, '$$$$$1$$$$');
 
     return processed;
   };
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex, rehypeRaw]}
-      components={{
-        // Custom renderer for code blocks to handle math in tables
-        code({ node, inline, className, children, ...props }: any) {
-          if (className?.includes('language-math')) {
-            return <span className={className}>{children}</span>;
-          }
-          return (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          );
-        },
-      }}
+      remarkPlugins={[remarkGfm as any, remarkMath as any]}
+      rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
     >
       {processContent(children)}
     </ReactMarkdown>
