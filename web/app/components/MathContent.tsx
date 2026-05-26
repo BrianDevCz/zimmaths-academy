@@ -27,6 +27,7 @@ export default function MathContent({ children }: { children: string }) {
       .replace(/&ne;/g, '\\neq');
 
     // Step 3: Convert \\(...\\) to $...$ (inline math)
+    // This only affects \\( and \\) NOT \\$
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
 
     // Step 4: Convert \\[...\\] to $$...$$ (display math)
