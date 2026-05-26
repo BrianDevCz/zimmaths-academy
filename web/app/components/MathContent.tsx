@@ -32,63 +32,7 @@ export default function MathContent({ children }: { children: string }) {
     // Step 4: Convert \\[...\\] to $$...$$ (display math)
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
 
-    // Step 5: Process the content character by character
-    let result = '';
-    let inMath = false;
-    let mathDelimiter = '';
-    let mathContent = '';
-    
-    for (let i = 0; i < processed.length; i++) {
-      // Check for display math $$...$$
-      if (processed.substring(i, i + 2) === '$$' && !inMath) {
-        inMath = true;
-        mathDelimiter = '$$';
-        mathContent = '';
-        result += '$$';
-        i++; // Skip the second $
-        continue;
-      } else if (processed.substring(i, i + 2) === '$$' && inMath && mathDelimiter === '$$') {
-        inMath = false;
-        mathDelimiter = '';
-        result += mathContent + '$$';
-        i++; // Skip the second $
-        continue;
-      }
-      // Check for inline math $...$
-      else if (processed[i] === '$' && !inMath && processed.substring(i, i + 2) !== '$$') {
-        inMath = true;
-        mathDelimiter = '$';
-        mathContent = '';
-        result += '$';
-        continue;
-      } else if (processed[i] === '$' && inMath && mathDelimiter === '$') {
-        inMath = false;
-        mathDelimiter = '';
-        result += mathContent + '$';
-        continue;
-      }
-      
-      // Collect and process math content
-      if (inMath) {
-        // Handle \$
-        if (processed[i] === '\\' && processed[i + 1] === '$') {
-          mathContent += '\\$';
-          i++; // Skip the $
-        } else {
-          mathContent += processed[i];
-        }
-      } else {
-        // Outside math mode - protect currency dollar signs
-        if (processed[i] === '$' && i + 1 < processed.length && /\d/.test(processed[i + 1])) {
-          // This is a currency dollar sign followed by a number
-          result += '\\$';
-        } else {
-          result += processed[i];
-        }
-      }
-    }
-
-    return result;
+    return processed;
   };
 
   return (
