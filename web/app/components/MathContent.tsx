@@ -27,13 +27,56 @@ export default function MathContent({ children }: { children: string }) {
       .replace(/&ne;/g, '\\neq');
 
     // Step 3: Convert \\(...\\) to $...$ (inline math)
-    // This only affects \\( and \\) NOT \\$
+    // Do this BEFORE processing dollar signs so we know which are math
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
 
     // Step 4: Convert \\[...\\] to $$...$$ (display math)
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
 
-    return processed;
+    // Step 5: Protect currency dollar signs (not part of math expressions)
+    // Only replace $ followed by a number if it's NOT already inside a math expression
+    // We identify math expressions as being between $...$ or $$...$$
+    let result = '';
+    let inMath = false;
+    let mathDelimiter = '';
+    
+    for (let i = 0; i < processed.length; i++) {
+      // Check for display math $$...$$
+      if (processed.substring(i, i + 2) === '$$' && !inMath) {
+        inMath = true;
+        mathDelimiter = '$$';
+        result += '$$';
+        i++; // Skip the second $
+        continue;
+      } else if (processed.substring(i, i + 2) === '$$' && inMath && mathDelimiter === '$$') {
+        inMath = false;
+        mathDelimiter = '';
+        result += '$$';
+        i++; // Skip the second $
+        continue;
+      }
+      // Check for inline math $...$
+      else if (processed[i] === '$' && !inMath && processed.substring(i, i + 2) !== '$$') {
+        inMath = true;
+        mathDelimiter = '$';
+        result += '$';
+        continue;
+      } else if (processed[i] === '$' && inMath && mathDelimiter === '$') {
+        inMath = false;
+        mathDelimiter = '';
+        result += '$';
+        continue;
+      }
+      
+      // If we encounter a $ followed by a digit and we're NOT in math mode, protect it
+      if (processed[i] === '$' && !inMath && /\d/.test(processed[i + 1] || '')) {
+        result += '&#36;';
+      } else {
+        result += processed[i];
+      }
+    }
+
+    return result;
   };
 
   return (
