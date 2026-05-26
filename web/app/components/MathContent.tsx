@@ -26,17 +26,13 @@ export default function MathContent({ children }: { children: string }) {
       .replace(/&ge;/g, '\\geq')
       .replace(/&ne;/g, '\\neq');
 
-    // Step 3: Handle escaped dollar signs within math expressions
-    // Convert $\$2{,}000$ to $\text{\$}2{,}000$ or just $2{,}000$ inside math
-    processed = processed.replace(/\$\\\$/g, '$$'); // Fix double escaped dollars
-    
-    // Step 4: Convert \\(...\\) to $...$ (inline math)
+    // Step 3: Convert \\(...\\) to $...$ (inline math)
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
 
-    // Step 5: Convert \\[...\\] to $$...$$ (display math)
+    // Step 4: Convert \\[...\\] to $$...$$ (display math)
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
 
-    // Step 6: Process the content to protect currency outside math and handle math properly
+    // Step 5: Process the content character by character
     let result = '';
     let inMath = false;
     let mathDelimiter = '';
@@ -54,8 +50,6 @@ export default function MathContent({ children }: { children: string }) {
       } else if (processed.substring(i, i + 2) === '$$' && inMath && mathDelimiter === '$$') {
         inMath = false;
         mathDelimiter = '';
-        // Process math content to handle escaped dollars
-        mathContent = mathContent.replace(/\\\$/g, '\\$');
         result += mathContent + '$$';
         i++; // Skip the second $
         continue;
@@ -70,19 +64,24 @@ export default function MathContent({ children }: { children: string }) {
       } else if (processed[i] === '$' && inMath && mathDelimiter === '$') {
         inMath = false;
         mathDelimiter = '';
-        // Process math content to handle escaped dollars
-        mathContent = mathContent.replace(/\\\$/g, '\\text{\\$}');
         result += mathContent + '$';
         continue;
       }
       
-      // Collect math content
+      // Collect and process math content
       if (inMath) {
-        mathContent += processed[i];
+        // Handle \$
+        if (processed[i] === '\\' && processed[i + 1] === '$') {
+          mathContent += '\\$';
+          i++; // Skip the $
+        } else {
+          mathContent += processed[i];
+        }
       } else {
-        // If we encounter a $ followed by a digit and we're NOT in math mode, protect it
-        if (processed[i] === '$' && /\d/.test(processed[i + 1] || '')) {
-          result += '&#36;';
+        // Outside math mode - protect currency dollar signs
+        if (processed[i] === '$' && i + 1 < processed.length && /\d/.test(processed[i + 1])) {
+          // This is a currency dollar sign followed by a number
+          result += '\\$';
         } else {
           result += processed[i];
         }
