@@ -13,7 +13,7 @@ function detectParts(questionText: string): string[] {
   return [...new Set(matches.map((m) => m.replace(/[()]/g, "")))];
 }
 
-// ── Answer Input ──
+// ── Answer Input ──────────────────────────────────────────────
 function AnswerInput({
   questionId, part, value, onChange, ocrPreview, ocrLoading,
   onStartCamera, onOpenUpload, onClearPreview,
@@ -56,6 +56,7 @@ function AnswerInput({
   );
 }
 
+// ── Main Component ────────────────────────────────────────────
 export default function PracticeTestPage() {
   const router = useRouter();
   const { token, loading: authLoading } = useAuth();
@@ -78,6 +79,42 @@ export default function PracticeTestPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTargetRef = useRef<{ questionId: string; part: string | null } | null>(null);
 
+  // Helper function to clean math content
+  const cleanMathContent = (text: string) => {
+    if (!text) return '';
+    
+    return text
+      // Fix triple dollar signs
+      .replace(/\$\$\$(.*?)\$\$\$/g, '$$$1$$')
+      // Fix escaped backslashes
+      .replace(/\\\\/g, '\\')
+      // Fix spaced out math delimiters
+      .replace(/\$\s+\$(.*?)\$\s+\$/g, '$$$1$$')
+      // Fix extra spaces in delimiters
+      .replace(/\\\[\s*/g, '\\[')
+      .replace(/\s*\\\]/g, '\\]')
+      .replace(/\\\(\s*/g, '\\(')
+      .replace(/\s*\\\)/g, '\\)')
+      // Fix cases where $ is separated from content
+      .replace(/\$\s+/g, '$')
+      .replace(/\s+\$/g, '$')
+      // Fix cases where $$ is separated from content
+      .replace(/\$\$\s+/g, '$$')
+      .replace(/\s+\$\$/g, '$$')
+      // Fix HTML entities in table content
+      .replace(/&le;/g, '≤')
+      .replace(/&ge;/g, '≥')
+      .replace(/&ne;/g, '≠')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      // Fix LaTeX comparison operators
+      .replace(/\\leq/g, '≤')
+      .replace(/\\geq/g, '≥')
+      .replace(/\\neq/g, '≠');
+  };
+
+  // ── Fetch questions from API ──
   useEffect(() => {
     if (authLoading) return;
 
@@ -102,20 +139,26 @@ export default function PracticeTestPage() {
         const data = await response.json();
         
         if (data.success && data.data) {
-          let questionData: any[] = [];
-          if (Array.isArray(data.data) && data.data.length > 0) {
-            if (Array.isArray(data.data[0])) {
-              questionData = data.data[0];
-            } else {
-              questionData = data.data;
-            }
-          }
-          sessionStorage.setItem("practiceQuestions", JSON.stringify(questionData));
-          setQuestions(questionData);
+          // Clean the data from the API
+          const cleanedQuestions = data.data.map((q: any) => ({
+            ...q,
+            questionText: cleanMathContent(q.questionText || '')
+          }));
+          
+          // Store cleaned data in sessionStorage
+          sessionStorage.setItem("practiceQuestions", JSON.stringify(cleanedQuestions));
+          setQuestions(cleanedQuestions);
         } else {
+          // Fallback to sessionStorage
           const stored = sessionStorage.getItem("practiceQuestions");
           if (stored) {
-            setQuestions(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            // Clean the sessionStorage data too
+            const cleaned = parsed.map((q: any) => ({
+              ...q,
+              questionText: cleanMathContent(q.questionText || '')
+            }));
+            setQuestions(cleaned);
           } else {
             router.push("/practice");
           }
@@ -124,7 +167,12 @@ export default function PracticeTestPage() {
         console.error("Failed to load questions:", err);
         const stored = sessionStorage.getItem("practiceQuestions");
         if (stored) {
-          setQuestions(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          const cleaned = parsed.map((q: any) => ({
+            ...q,
+            questionText: cleanMathContent(q.questionText || '')
+          }));
+          setQuestions(cleaned);
         } else {
           router.push("/practice");
         }
@@ -145,7 +193,7 @@ export default function PracticeTestPage() {
   }, [timeLeft, submitted]);
 
   const currentQuestion = questions[currentIndex];
-  const currentParts = currentQuestion ? detectParts(currentQuestion.questionText || "") : [];
+  const currentParts = currentQuestion ? detectParts(currentQuestion.questionText) : [];
   const isMultiPart = currentParts.length > 1;
   const progress = questions.length > 0 ? Math.round(((currentIndex + 1) / questions.length) * 100) : 0;
   const formatTime = (s: number) => Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
@@ -154,7 +202,7 @@ export default function PracticeTestPage() {
     const ans = answers[qId];
     if (!ans) return false;
     if (typeof ans === "string") return ans.trim().length > 0;
-    return Object.values(ans).some((v) => (v as string).trim().length > 0);
+    return Object.values(ans).some((v) => v.trim().length > 0);
   };
 
   const handleSingleAnswer = (questionId: string, value: string) =>
@@ -178,6 +226,7 @@ export default function PracticeTestPage() {
     return typeof ans === "string" ? ans : "";
   };
 
+  // ── Camera functions ──────────────────────────────────────
   const startCamera = async (questionId: string, part: string | null) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -254,6 +303,7 @@ export default function PracticeTestPage() {
     part ? handlePartAnswer(questionId, part, "") : handleSingleAnswer(questionId, "");
   };
 
+  // ── Share Score ──────────────────────────────────────────
   const handleShareScore = async (scorePercentage: number, correct: number, total: number) => {
     const message = `🎯 I just scored ${scorePercentage}% on a ZimMaths Academy practice test! (${correct}/${total} correct)\n\nPractice ZIMSEC O-Level Maths at zimmaths.com 📚`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -272,12 +322,13 @@ export default function PracticeTestPage() {
     }
   };
 
+  // ── Submit ──────────────────────────────────────────────────
   const handleSubmit = async () => {
     setLoading(true);
     try {
       const answersArray = questions.map((q) => {
         const ans = answers[q.id];
-        const parts = detectParts(q.questionText || "");
+        const parts = detectParts(q.questionText);
         if (parts.length > 1 && typeof ans === "object" && ans !== null) {
           return { questionId: q.id, partAnswers: ans, userAnswer: "" };
         }
@@ -390,17 +441,15 @@ export default function PracticeTestPage() {
               </div>
 
               <div className="text-gray-800 mb-3">
-                <MathContent key={`res-q-${result.questionId}`}>
-                  {result.questionText || ""}
-                </MathContent>
+                <MathContent>{result.questionText || ""}</MathContent>
               </div>
 
               {result.questionImageUrl && (
                 <img src={result.questionImageUrl} alt="diagram"
-                  className="max-w-full max-h-96 rounded-lg border border-gray-200 object-contain mb-3 mt-3" />
+                  className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain mb-3" />
               )}
 
-              <div className="space-y-2 text-sm mt-3">
+              <div className="space-y-2 text-sm">
                 {result.partResults && result.partResults.length > 0 ? (
                   <div className="space-y-2 mt-2">
                     {result.partResults.map((part: any) => (
@@ -446,9 +495,7 @@ export default function PracticeTestPage() {
                       <div className="text-gray-600 flex gap-1 items-baseline flex-wrap">
                         <span>Correct answer:</span>
                         <span className="text-green-600 font-medium">
-                          <MathContent key={`res-ans-${result.questionId}`}>
-                            {result.correctAnswer || ""}
-                          </MathContent>
+                          <MathContent>{result.correctAnswer}</MathContent>
                         </span>
                       </div>
                     )}
@@ -503,7 +550,6 @@ export default function PracticeTestPage() {
       <canvas ref={canvasRef} className="hidden" />
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
 
-      {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex flex-col items-center justify-center p-4">
           <p className="text-white text-sm mb-3">Point camera at your handwritten working</p>
@@ -515,7 +561,6 @@ export default function PracticeTestPage() {
         </div>
       )}
 
-      {/* Progress Bar */}
       <div className="bg-brand-800 text-white px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-between items-center mb-2">
@@ -530,12 +575,11 @@ export default function PracticeTestPage() {
         </div>
       </div>
 
-      {/* Question */}
       <section className="max-w-4xl mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 mb-6">
           <div className="flex gap-2 mb-4 flex-wrap">
             <span className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded font-medium">
-              {currentQuestion?.topic?.name || "Maths"}
+              {currentQuestion?.topic?.name}
             </span>
             <span className={
               "text-xs px-2 py-1 rounded capitalize font-medium " +
@@ -543,23 +587,21 @@ export default function PracticeTestPage() {
                 : currentQuestion?.difficulty === "hard" ? "bg-red-100 text-red-700"
                 : "bg-yellow-100 text-yellow-700")
             }>
-              {currentQuestion?.difficulty || "mixed"}
+              {currentQuestion?.difficulty}
             </span>
             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-              {currentQuestion?.marks || 0} marks
+              {currentQuestion?.marks} marks
             </span>
           </div>
 
-          <div className="text-gray-800 text-xl leading-relaxed mb-4">
-            <MathContent key={`q-text-${currentQuestion?.id}-${currentIndex}`}>
-              {currentQuestion?.questionText || ""}
-            </MathContent>
+          <div className="text-gray-800 text-lg leading-relaxed mb-4">
+            <MathContent>{currentQuestion?.questionText || ""}</MathContent>
           </div>
 
           {currentQuestion?.questionImageUrl && (
             <div className="mb-6 flex justify-center">
               <img src={currentQuestion.questionImageUrl} alt="diagram"
-                className="max-w-full max-h-96 rounded-lg border border-gray-200 object-contain" />
+                className="max-w-full max-h-80 rounded-lg border border-gray-200 object-contain" />
             </div>
           )}
 

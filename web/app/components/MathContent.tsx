@@ -35,13 +35,35 @@ function InlineMath({ text }: { text: string }) {
     render();
   }, [text]);
 
-  if (!html) return <span>{text}</span>;
-  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  if (!html) return <span className="break-words">{text}</span>;
+  return <span className="break-words inline-block" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-// ── Check if raw math delimiters are still present ────────────
-function hasRawMath(text: string): boolean {
-  return /\$\$[^\$]+\$\$/.test(text) || /\$[^$\s][^$\n]*\$/.test(text);
+// ── Check if content contains math that needs rendering ──────
+function hasMathContent(text: string): boolean {
+  if (!text) return false;
+  
+  // Check for raw math delimiters
+  if (/\$\$[^\$]+\$\$/.test(text) || /\$[^$\s][^$\n]*\$/.test(text)) {
+    return true;
+  }
+  
+  // Check for LaTeX commands
+  if (/\\[a-zA-Z]+/.test(text)) {
+    return true;
+  }
+  
+  // Check for comparison operators (already converted to LaTeX)
+  if (/\\leq|\\geq|\\neq|\\times|\\div/.test(text)) {
+    return true;
+  }
+  
+  // Check for math symbols (already converted)
+  if (/≤|≥|≠|×|÷|°|π|θ|α|β|Δ|∑|∫|√|∞|≈|±/.test(text)) {
+    return true;
+  }
+  
+  return false;
 }
 
 export default function MathContent({ children }: { children: string }) {
@@ -112,10 +134,16 @@ export default function MathContent({ children }: { children: string }) {
 
   const processed = processContent(children);
 
+  // Process cell children with the processed content
   const processCellChildren = (children: React.ReactNode): React.ReactNode => {
     return React.Children.map(children, (child) => {
-      if (typeof child === 'string' && hasRawMath(child)) {
-        return <InlineMath text={child} />;
+      if (typeof child === 'string') {
+        // Use hasMathContent to check if this string needs math rendering
+        if (hasMathContent(child)) {
+          return <InlineMath text={child} />;
+        }
+        // For plain text, ensure it wraps properly
+        return <span className="break-words">{child}</span>;
       }
       return child;
     });
@@ -128,27 +156,53 @@ export default function MathContent({ children }: { children: string }) {
         rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
         components={{
           table: ({ children, ...props }: any) => (
-            <table {...props} className="border-collapse border border-gray-300 my-4 w-full table-fixed">
-              {children}
-            </table>
+            <div className="w-full overflow-x-auto">
+              <table {...props} className="border-collapse border-2 border-gray-600 my-4 w-full min-w-[300px]">
+                {children}
+              </table>
+            </div>
           ),
           thead: ({ children, ...props }: any) => (
             <thead {...props} className="bg-gray-100">
               {children}
             </thead>
           ),
-          th: ({ children, ...props }: any) => (
-            <th {...props} className="border border-gray-300 px-2 py-2 text-left font-semibold break-words whitespace-normal text-sm">
-              {processCellChildren(children)}
-            </th>
-          ),
-          td: ({ children, ...props }: any) => (
-            <td {...props} className="border border-gray-300 px-2 py-2 break-words whitespace-normal text-sm">
-              {processCellChildren(children)}
-            </td>
-          ),
+          th: ({ children, ...props }: any) => {
+            // Process children with math content
+            const processedChildren = React.Children.map(children, (child) => {
+              if (typeof child === 'string') {
+                if (hasMathContent(child)) {
+                  return <InlineMath text={child} />;
+                }
+                return <span className="break-words">{child}</span>;
+              }
+              return child;
+            });
+            return (
+              <th {...props} className="border-2 border-gray-600 px-3 py-2 text-center font-bold break-words whitespace-normal text-sm">
+                {processedChildren}
+              </th>
+            );
+          },
+          td: ({ children, ...props }: any) => {
+            // Process children with math content
+            const processedChildren = React.Children.map(children, (child) => {
+              if (typeof child === 'string') {
+                if (hasMathContent(child)) {
+                  return <InlineMath text={child} />;
+                }
+                return <span className="break-words">{child}</span>;
+              }
+              return child;
+            });
+            return (
+              <td {...props} className="border-2 border-gray-600 px-3 py-2 text-center break-words whitespace-normal text-sm">
+                {processedChildren}
+              </td>
+            );
+          },
           tr: ({ children, ...props }: any) => (
-            <tr {...props} className="even:bg-gray-50">
+            <tr {...props} className="even:bg-gray-50 hover:bg-gray-100 transition-colors">
               {children}
             </tr>
           ),
