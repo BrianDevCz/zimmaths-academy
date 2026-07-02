@@ -13,7 +13,7 @@ function detectParts(questionText: string): string[] {
   return [...new Set(matches.map((m) => m.replace(/[()]/g, "")))];
 }
 
-// ── Answer Input — defined OUTSIDE main component to prevent remount ──
+// ── Answer Input ──
 function AnswerInput({
   questionId, part, value, onChange, ocrPreview, ocrLoading,
   onStartCamera, onOpenUpload, onClearPreview,
@@ -56,16 +56,15 @@ function AnswerInput({
   );
 }
 
-// ── Main Component ────────────────────────────────────────────
 export default function PracticeTestPage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<{ [questionId: string]: string | { [part: string]: string } }>({});
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(0);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<{ questionId: string; part: string | null } | null>(null);
@@ -73,21 +72,69 @@ export default function PracticeTestPage() {
   const [ocrLoadingKey, setOcrLoadingKey] = useState<string | null>(null);
   const [ocrPreviews, setOcrPreviews] = useState<{ [key: string]: string }>({});
   const [shareTracked, setShareTracked] = useState(false);
+  const [practiceSettings, setPracticeSettings] = useState<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTargetRef = useRef<{ questionId: string; part: string | null } | null>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("practiceQuestions");
-    const settings = sessionStorage.getItem("practiceSettings");
-    if (!stored) { router.push("/practice"); return; }
-    setQuestions(JSON.parse(stored));
-    if (settings) {
-      const s = JSON.parse(settings);
-      setTimeLeft(parseInt(s.count) * 60);
-    }
-  }, [router]);
+    if (authLoading) return;
+
+    const fetchQuestions = async () => {
+      try {
+        const settings = sessionStorage.getItem("practiceSettings");
+        if (!settings) {
+          router.push("/practice");
+          return;
+        }
+        const parsedSettings = JSON.parse(settings);
+        setPracticeSettings(parsedSettings);
+        setTimeLeft(parseInt(parsedSettings.count) * 60);
+
+        const headers: any = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const response = await fetch(
+          `${API_URL}/api/practice/generate?difficulty=${parsedSettings.difficulty}&count=${parsedSettings.count}`,
+          { headers }
+        );
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          let questionData: any[] = [];
+          if (Array.isArray(data.data) && data.data.length > 0) {
+            if (Array.isArray(data.data[0])) {
+              questionData = data.data[0];
+            } else {
+              questionData = data.data;
+            }
+          }
+          sessionStorage.setItem("practiceQuestions", JSON.stringify(questionData));
+          setQuestions(questionData);
+        } else {
+          const stored = sessionStorage.getItem("practiceQuestions");
+          if (stored) {
+            setQuestions(JSON.parse(stored));
+          } else {
+            router.push("/practice");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load questions:", err);
+        const stored = sessionStorage.getItem("practiceQuestions");
+        if (stored) {
+          setQuestions(JSON.parse(stored));
+        } else {
+          router.push("/practice");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestions();
+  }, [token, authLoading, router]);
 
   useEffect(() => { return () => { stopCamera(); }; }, []);
 
@@ -98,7 +145,7 @@ export default function PracticeTestPage() {
   }, [timeLeft, submitted]);
 
   const currentQuestion = questions[currentIndex];
-  const currentParts = currentQuestion ? detectParts(currentQuestion.questionText) : [];
+  const currentParts = currentQuestion ? detectParts(currentQuestion.questionText || "") : [];
   const isMultiPart = currentParts.length > 1;
   const progress = questions.length > 0 ? Math.round(((currentIndex + 1) / questions.length) * 100) : 0;
   const formatTime = (s: number) => Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
@@ -107,7 +154,7 @@ export default function PracticeTestPage() {
     const ans = answers[qId];
     if (!ans) return false;
     if (typeof ans === "string") return ans.trim().length > 0;
-    return Object.values(ans).some((v) => v.trim().length > 0);
+    return Object.values(ans).some((v) => (v as string).trim().length > 0);
   };
 
   const handleSingleAnswer = (questionId: string, value: string) =>
@@ -131,7 +178,6 @@ export default function PracticeTestPage() {
     return typeof ans === "string" ? ans : "";
   };
 
-  // ── Camera ──────────────────────────────────────────────────
   const startCamera = async (questionId: string, part: string | null) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -208,13 +254,11 @@ export default function PracticeTestPage() {
     part ? handlePartAnswer(questionId, part, "") : handleSingleAnswer(questionId, "");
   };
 
-  // ── Share Score to WhatsApp + track Social Learner badge ────
   const handleShareScore = async (scorePercentage: number, correct: number, total: number) => {
     const message = `🎯 I just scored ${scorePercentage}% on a ZimMaths Academy practice test! (${correct}/${total} correct)\n\nPractice ZIMSEC O-Level Maths at zimmaths.com 📚`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, "_blank");
 
-    // Track share for Social Learner badge
     if (token && !shareTracked) {
       try {
         await fetch(`${API_URL}/api/badges/track-share`, {
@@ -228,13 +272,12 @@ export default function PracticeTestPage() {
     }
   };
 
-  // ── Submit ──────────────────────────────────────────────────
   const handleSubmit = async () => {
     setLoading(true);
     try {
       const answersArray = questions.map((q) => {
         const ans = answers[q.id];
-        const parts = detectParts(q.questionText);
+        const parts = detectParts(q.questionText || "");
         if (parts.length > 1 && typeof ans === "object" && ans !== null) {
           return { questionId: q.id, partAnswers: ans, userAnswer: "" };
         }
@@ -246,9 +289,7 @@ export default function PracticeTestPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           answers: answersArray,
-          difficulty: sessionStorage.getItem("practiceSettings")
-            ? JSON.parse(sessionStorage.getItem("practiceSettings")!).difficulty
-            : "mixed",
+          difficulty: practiceSettings?.difficulty || "mixed",
           timeTaken: timeLeft,
         }),
       });
@@ -271,7 +312,7 @@ export default function PracticeTestPage() {
           <p className="text-brand-200">Here are your results</p>
         </section>
 
-        <section className="max-w-2xl mx-auto px-6 py-10 space-y-6">
+        <section className="max-w-4xl mx-auto px-6 py-10 space-y-6">
           <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 text-center">
             <div className={
               "text-7xl font-bold mb-2 " +
@@ -304,7 +345,6 @@ export default function PracticeTestPage() {
               </div>
             )}
 
-            {/* Badges awarded */}
             {summary?.badgesAwarded?.length > 0 && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-4">
                 <p className="text-yellow-700 font-bold">🏅 New Badge{summary.badgesAwarded.length > 1 ? 's' : ''} Earned!</p>
@@ -312,7 +352,6 @@ export default function PracticeTestPage() {
               </div>
             )}
 
-            {/* WhatsApp Share Score */}
             <button
               onClick={() => handleShareScore(summary?.scorePercentage, summary?.correctCount, summary?.totalQuestions)}
               className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white px-6 py-3 rounded-xl font-bold transition mt-2"
@@ -351,15 +390,17 @@ export default function PracticeTestPage() {
               </div>
 
               <div className="text-gray-800 mb-3">
-                <MathContent>{result.questionText || ""}</MathContent>
+                <MathContent key={`res-q-${result.questionId}`}>
+                  {result.questionText || ""}
+                </MathContent>
               </div>
 
               {result.questionImageUrl && (
                 <img src={result.questionImageUrl} alt="diagram"
-                  className="max-w-full max-h-64 rounded-lg border border-gray-200 object-contain mb-3" />
+                  className="max-w-full max-h-96 rounded-lg border border-gray-200 object-contain mb-3 mt-3" />
               )}
 
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm mt-3">
                 {result.partResults && result.partResults.length > 0 ? (
                   <div className="space-y-2 mt-2">
                     {result.partResults.map((part: any) => (
@@ -405,7 +446,9 @@ export default function PracticeTestPage() {
                       <div className="text-gray-600 flex gap-1 items-baseline flex-wrap">
                         <span>Correct answer:</span>
                         <span className="text-green-600 font-medium">
-                          <MathContent>{result.correctAnswer}</MathContent>
+                          <MathContent key={`res-ans-${result.questionId}`}>
+                            {result.correctAnswer || ""}
+                          </MathContent>
                         </span>
                       </div>
                     )}
@@ -440,10 +483,16 @@ export default function PracticeTestPage() {
     );
   }
 
-  if (questions.length === 0) {
+  if (loading || questions.length === 0) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading questions...</p>
+      <main className="min-h-screen bg-gray-50">
+        <section className="bg-brand-800 text-white py-12 px-6 text-center">
+          <h1 className="text-4xl font-bold mb-3">Practice Test</h1>
+          <p className="text-brand-200 text-lg">Answer the questions below</p>
+        </section>
+        <div className="flex items-center justify-center py-20">
+          <p className="text-gray-500">Loading questions...</p>
+        </div>
       </main>
     );
   }
@@ -468,7 +517,7 @@ export default function PracticeTestPage() {
 
       {/* Progress Bar */}
       <div className="bg-brand-800 text-white px-6 py-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-brand-200">Question {currentIndex + 1} of {questions.length}</span>
             <span className={"text-sm font-semibold " + (timeLeft < 60 ? "text-red-300" : "text-brand-200")}>
@@ -482,11 +531,11 @@ export default function PracticeTestPage() {
       </div>
 
       {/* Question */}
-      <section className="max-w-2xl mx-auto px-6 py-8">
+      <section className="max-w-4xl mx-auto px-6 py-8">
         <div className="bg-white rounded-2xl shadow p-8 border border-gray-200 mb-6">
           <div className="flex gap-2 mb-4 flex-wrap">
             <span className="text-xs bg-brand-100 text-brand-700 px-2 py-1 rounded font-medium">
-              {currentQuestion?.topic?.name}
+              {currentQuestion?.topic?.name || "Maths"}
             </span>
             <span className={
               "text-xs px-2 py-1 rounded capitalize font-medium " +
@@ -494,21 +543,23 @@ export default function PracticeTestPage() {
                 : currentQuestion?.difficulty === "hard" ? "bg-red-100 text-red-700"
                 : "bg-yellow-100 text-yellow-700")
             }>
-              {currentQuestion?.difficulty}
+              {currentQuestion?.difficulty || "mixed"}
             </span>
             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-              {currentQuestion?.marks} marks
+              {currentQuestion?.marks || 0} marks
             </span>
           </div>
 
           <div className="text-gray-800 text-xl leading-relaxed mb-4">
-            <MathContent>{currentQuestion?.questionText || ""}</MathContent>
+            <MathContent key={`q-text-${currentQuestion?.id}-${currentIndex}`}>
+              {currentQuestion?.questionText || ""}
+            </MathContent>
           </div>
 
           {currentQuestion?.questionImageUrl && (
             <div className="mb-6 flex justify-center">
               <img src={currentQuestion.questionImageUrl} alt="diagram"
-                className="max-w-full max-h-80 rounded-lg border border-gray-200 object-contain" />
+                className="max-w-full max-h-96 rounded-lg border border-gray-200 object-contain" />
             </div>
           )}
 
