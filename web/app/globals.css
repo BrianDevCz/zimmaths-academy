@@ -14,3 +14,48 @@
   --color-brand-800: #1565C0;
   --color-brand-900: #0D47A1;
 }
+
+/* Math Content - Matrix & Display Math Fixes */
+.math-content .katex {
+  font-size: 1.1em;
+}
+
+.math-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
+.math-content .katex .katex-html {
+  white-space: nowrap;
+}
+
+/* Prevent matrix brackets from being cut off */
+.math-content .katex .delimsizing {
+  min-height: 1em;
+}
+
+/* Ensure matrix cells have proper spacing */
+.math-content .katex .array > span {
+  padding: 0.15em 0.3em;
+}
+
+/* Matrix-specific: ensure proper bracket rendering */
+.math-content .katex .delimsizing.size1,
+.math-content .katex .delimsizing.size2,
+.math-content .katex .delimsizing.size3,
+.math-content .katex .delimsizing.size4 {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Prevent matrix overflow on mobile */
+.math-content .katex-display > .katex {
+  display: inline-block;
+  min-width: 100%;
+}
+
+/* Inline math spacing fix */
+.math-content .katex-inline {
+  white-space: nowrap;
+}

@@ -80,14 +80,21 @@ export default function PracticeTestPage() {
   const fileTargetRef = useRef<{ questionId: string; part: string | null } | null>(null);
 
   // Helper function to clean math content
+  //
+  // NOTE: This intentionally does NOT collapse "\\" -> "\" globally.
+  // "\\" is the row-separator inside LaTeX matrix/aligned/cases environments
+  // (e.g. \begin{pmatrix}1&2\\3&4\end{pmatrix}), and a blanket regex here
+  // strips it, corrupting every matrix (e.g. turns "2\\3" into "2\3", which
+  // KaTeX can't parse). MathContent.tsx already has a *safe*, whitelisted
+  // double-escape cleanup for genuinely double-escaped commands
+  // (\\frac, \\text, etc.) that specifically avoids this problem — so we
+  // don't need (and shouldn't duplicate) a blanket version here.
   const cleanMathContent = (text: string) => {
     if (!text) return '';
     
     return text
       // Fix triple dollar signs
       .replace(/\$\$\$(.*?)\$\$\$/g, '$$$1$$')
-      // Fix escaped backslashes
-      .replace(/\\\\/g, '\\')
       // Fix spaced out math delimiters
       .replace(/\$\s+\$(.*?)\$\s+\$/g, '$$$1$$')
       // Fix extra spaces in delimiters

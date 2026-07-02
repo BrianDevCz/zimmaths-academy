@@ -6,7 +6,6 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
 
-// ── Inline Math Renderer ──────────────────────────────────────
 function InlineMath({ text }: { text: string }) {
   const [html, setHtml] = useState<string>('');
 
@@ -15,10 +14,10 @@ function InlineMath({ text }: { text: string }) {
       try {
         const katex = await import('katex');
         let math = text;
-        const isDisplay = math.includes('$$') || math.includes('\\begin');
+        const isDisplay = math.includes('$$');
         
         if (isDisplay) {
-          math = math.replace(/\$\$/g, '').trim();
+          math = math.replace(/^\$\$/, '').replace(/\$\$$/, '').trim();
         } else {
           math = math.replace(/^\$/, '').replace(/\$$/, '').trim();
         }
@@ -39,91 +38,32 @@ function InlineMath({ text }: { text: string }) {
   return <span className="break-words inline-block" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-// ── Check if content contains math that needs rendering ──────
 function hasMathContent(text: string): boolean {
   if (!text) return false;
-  
-  // Check for raw math delimiters
-  if (/\$\$[^\$]+\$\$/.test(text) || /\$[^$\s][^$\n]*\$/.test(text)) {
-    return true;
-  }
-  
-  // Check for matrix environments
-  if (/\\begin\{pmatrix\}/.test(text) || /\\begin\{matrix\}/.test(text) || /\\begin\{vmatrix\}/.test(text)) {
-    return true;
-  }
-  
-  // Check for LaTeX commands
-  if (/\\[a-zA-Z]+/.test(text)) {
-    return true;
-  }
-  
-  // Check for comparison operators
-  if (/\\leq|\\geq|\\neq|\\times|\\div/.test(text)) {
-    return true;
-  }
-  
-  // Check for math symbols
-  if (/[≤≥≠×÷°πθαβΔ∑∫√∞≈±]/.test(text)) {
-    return true;
-  }
-  
+  if (/\$\$[^\$]+\$\$/.test(text) || /\$[^$\s][^$\n]*\$/.test(text)) return true;
+  if (/\\[a-zA-Z]+/.test(text)) return true;
+  if (/\\leq|\\geq|\\neq|\\times|\\div/.test(text)) return true;
+  if (/[≤≥≠×÷°πθαβΔ∑∫√∞≈±]/.test(text)) return true;
   return false;
 }
 
-// ── Convert inline math with matrices to display math ────────
-function convertMatrixMath(text: string): string {
-  // If text contains \begin{pmatrix} but is wrapped in \(...\), convert to \[...\]
-  if (text.includes('\\begin{pmatrix}') || text.includes('\\begin{matrix}') || text.includes('\\begin{vmatrix}')) {
-    // Remove \( and \) if present
-    text = text.replace(/\\\(/g, '').replace(/\\\)/g, '');
-    // Wrap in $$ for display math
-    if (!text.includes('$$')) {
-      text = '$$' + text.trim() + '$$';
-    }
-  }
-  return text;
-}
-
 export default function MathContent({ children }: { children: string }) {
-  if (typeof children !== 'string') {
-    return null;
-  }
-  if (!children || children.trim() === '' || children === 'null' || children === 'undefined') {
-    return null;
-  }
+  if (typeof children !== 'string') return null;
+  if (!children || children.trim() === '' || children === 'null' || children === 'undefined') return null;
 
   const processContent = (content: string): string => {
     let processed = content;
-
     processed = processed.replace(/\\n/g, '\n');
 
     const entityMap: Record<string, string> = {
-      '&lt;': '<',
-      '&gt;': '>',
-      '&amp;': '&',
-      '&quot;': '"',
-      '&#39;': "'",
-      '&#x27;': "'",
-      '&le;': '\\leq',
-      '&ge;': '\\geq',
-      '&ne;': '\\neq',
-      '&times;': '\\times',
-      '&divide;': '\\div',
-      '&deg;': '^{\\circ}',
-      '&pi;': '\\pi',
-      '&theta;': '\\theta',
-      '&alpha;': '\\alpha',
-      '&beta;': '\\beta',
-      '&sum;': '\\sum',
-      '&Delta;': '\\Delta',
-      '&radic;': '\\sqrt',
-      '&infin;': '\\infty',
-      '&approx;': '\\approx',
-      '&plusmn;': '\\pm',
-      '&frac12;': '\\frac{1}{2}',
-      '&frac14;': '\\frac{1}{4}',
-      '&frac34;': '\\frac{3}{4}',
+      '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'",
+      '&#x27;': "'", '&le;': '\\leq', '&ge;': '\\geq', '&ne;': '\\neq',
+      '&times;': '\\times', '&divide;': '\\div', '&deg;': '^{\\circ}',
+      '&pi;': '\\pi', '&theta;': '\\theta', '&alpha;': '\\alpha',
+      '&beta;': '\\beta', '&sum;': '\\sum', '&Delta;': '\\Delta',
+      '&radic;': '\\sqrt', '&infin;': '\\infty', '&approx;': '\\approx',
+      '&plusmn;': '\\pm', '&frac12;': '\\frac{1}{2}',
+      '&frac14;': '\\frac{1}{4}', '&frac34;': '\\frac{3}{4}',
     };
 
     for (const [entity, replacement] of Object.entries(entityMap)) {
@@ -132,40 +72,30 @@ export default function MathContent({ children }: { children: string }) {
 
     processed = processed.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 
-    // Handle matrix math - convert \( ... \) with matrices to $$ ... $$
-    processed = processed.replace(
-      /\\\(([\s\S]*?)\\\)/g,
-      (match, mathContent) => {
-        if (mathContent.includes('\\begin{pmatrix}') || 
-            mathContent.includes('\\begin{matrix}') || 
-            mathContent.includes('\\begin{vmatrix}')) {
-          return '$$' + mathContent.trim() + '$$';
-        }
-        return '\\(' + mathContent + '\\)';
-      }
-    );
-
-    // Also handle cases where matrix is already in display math
-    processed = processed.replace(
-      /\\\[([\s\S]*?)\\\]/g,
-      (match, mathContent) => {
-        return '$$' + mathContent.trim() + '$$';
-      }
-    );
-
+    // Convert escaped LaTeX delimiters to $/$$ format for remark-math
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
     processed = processed.replace(/\\\[/g, '$$').replace(/\\\]/g, '$$');
     processed = processed.replace(/\\\(/g, '$').replace(/\\\)/g, '$');
 
-    processed = processed.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
-      return '$$' + math.replace(/\\\\/g, '\\') + '$$';
-    });
-    processed = processed.replace(/\$([^$\n]+?)\$/g, (match, math) => {
-      return '$' + math.replace(/\\\\/g, '\\') + '$';
-    });
+    // Convert inline matrices to display math for better rendering
+    processed = processed.replace(
+      /\$([\s\S]*?)\$/g,
+      (match, mathContent) => {
+        if (mathContent.includes('\\begin{pmatrix}') || 
+            mathContent.includes('\\begin{matrix}') || 
+            mathContent.includes('\\begin{vmatrix}') ||
+            mathContent.includes('\\begin{bmatrix}') ||
+            mathContent.includes('\\begin{Bmatrix}')) {
+          return '$$' + mathContent.trim() + '$$';
+        }
+        return match;
+      }
+    );
 
-    processed = processed.replace(/\\\\(text|frac|sqrt|left|right|cdot|times|div|pm|mp|leq|geq|neq|approx|infty|pi|theta|alpha|beta|Delta|sum|int|prod|lim|log|ln|sin|cos|tan|arcsin|arccos|arctan)/g, '\\$1');
+    // Fix common LaTeX commands that got double-escaped
+    processed = processed.replace(/\\\\(text|frac|sqrt|left|right|cdot|times|div|pm|mp|leq|geq|neq|approx|infty|pi|theta|alpha|beta|Delta|sum|int|prod|lim|log|ln|sin|cos|tan|arcsin|arccos|arctan|begin|end)/g, '\\$1');
+
     processed = processed.replace(/\n{3,}/g, '\n\n');
 
     return processed;
@@ -175,25 +105,15 @@ export default function MathContent({ children }: { children: string }) {
 
   const processCellChildren = (children: React.ReactNode): React.ReactNode => {
     return React.Children.map(children, (child) => {
-      if (typeof child === 'string') {
-        // Check if it contains matrix content
-        const hasMatrix = child.includes('\\begin{pmatrix}') || 
-                         child.includes('\\begin{matrix}') || 
-                         child.includes('\\begin{vmatrix}');
-        
-        if (hasMathContent(child) || hasMatrix) {
-          // Convert matrix math to display mode
-          const converted = convertMatrixMath(child);
-          return <InlineMath text={converted} />;
-        }
-        return <span className="break-words">{child}</span>;
+      if (typeof child === 'string' && hasMathContent(child)) {
+        return <InlineMath text={child} />;
       }
       return child;
     });
   };
 
   return (
-    <div className="math-content prose max-w-none">
+    <div className="math-content max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm as any, remarkMath as any]}
         rehypePlugins={[rehypeKatex as any, rehypeRaw as any]}
