@@ -6,7 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
 
-// ── Inline Math Renderer (fallback for table cells) ──────────
+// ── Inline Math Renderer ──────────────────────────────────────
 function InlineMath({ text }: { text: string }) {
   const [html, setHtml] = useState<string>('');
 
@@ -15,7 +15,7 @@ function InlineMath({ text }: { text: string }) {
       try {
         const katex = await import('katex');
         let math = text;
-        const isDisplay = math.includes('$$');
+        const isDisplay = math.includes('$$') || math.includes('\\begin');
         
         if (isDisplay) {
           math = math.replace(/\$\$/g, '').trim();
@@ -48,22 +48,41 @@ function hasMathContent(text: string): boolean {
     return true;
   }
   
+  // Check for matrix environments
+  if (/\\begin\{pmatrix\}/.test(text) || /\\begin\{matrix\}/.test(text) || /\\begin\{vmatrix\}/.test(text)) {
+    return true;
+  }
+  
   // Check for LaTeX commands
   if (/\\[a-zA-Z]+/.test(text)) {
     return true;
   }
   
-  // Check for comparison operators (already converted to LaTeX)
+  // Check for comparison operators
   if (/\\leq|\\geq|\\neq|\\times|\\div/.test(text)) {
     return true;
   }
   
-  // Check for math symbols (already converted)
-  if (/≤|≥|≠|×|÷|°|π|θ|α|β|Δ|∑|∫|√|∞|≈|±/.test(text)) {
+  // Check for math symbols
+  if (/[≤≥≠×÷°πθαβΔ∑∫√∞≈±]/.test(text)) {
     return true;
   }
   
   return false;
+}
+
+// ── Convert inline math with matrices to display math ────────
+function convertMatrixMath(text: string): string {
+  // If text contains \begin{pmatrix} but is wrapped in \(...\), convert to \[...\]
+  if (text.includes('\\begin{pmatrix}') || text.includes('\\begin{matrix}') || text.includes('\\begin{vmatrix}')) {
+    // Remove \( and \) if present
+    text = text.replace(/\\\(/g, '').replace(/\\\)/g, '');
+    // Wrap in $$ for display math
+    if (!text.includes('$$')) {
+      text = '$$' + text.trim() + '$$';
+    }
+  }
+  return text;
 }
 
 export default function MathContent({ children }: { children: string }) {
@@ -113,6 +132,27 @@ export default function MathContent({ children }: { children: string }) {
 
     processed = processed.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 
+    // Handle matrix math - convert \( ... \) with matrices to $$ ... $$
+    processed = processed.replace(
+      /\\\(([\s\S]*?)\\\)/g,
+      (match, mathContent) => {
+        if (mathContent.includes('\\begin{pmatrix}') || 
+            mathContent.includes('\\begin{matrix}') || 
+            mathContent.includes('\\begin{vmatrix}')) {
+          return '$$' + mathContent.trim() + '$$';
+        }
+        return '\\(' + mathContent + '\\)';
+      }
+    );
+
+    // Also handle cases where matrix is already in display math
+    processed = processed.replace(
+      /\\\[([\s\S]*?)\\\]/g,
+      (match, mathContent) => {
+        return '$$' + mathContent.trim() + '$$';
+      }
+    );
+
     processed = processed.replace(/\\\\\[/g, '$$').replace(/\\\\\]/g, '$$');
     processed = processed.replace(/\\\\\(/g, '$').replace(/\\\\\)/g, '$');
     processed = processed.replace(/\\\[/g, '$$').replace(/\\\]/g, '$$');
@@ -133,13 +173,18 @@ export default function MathContent({ children }: { children: string }) {
 
   const processed = processContent(children);
 
-  // Process cell children - FIXED to prevent infinite loops
   const processCellChildren = (children: React.ReactNode): React.ReactNode => {
     return React.Children.map(children, (child) => {
       if (typeof child === 'string') {
-        // Only render math if it's not already processed
-        if (hasMathContent(child)) {
-          return <InlineMath text={child} />;
+        // Check if it contains matrix content
+        const hasMatrix = child.includes('\\begin{pmatrix}') || 
+                         child.includes('\\begin{matrix}') || 
+                         child.includes('\\begin{vmatrix}');
+        
+        if (hasMathContent(child) || hasMatrix) {
+          // Convert matrix math to display mode
+          const converted = convertMatrixMath(child);
+          return <InlineMath text={converted} />;
         }
         return <span className="break-words">{child}</span>;
       }
@@ -155,7 +200,7 @@ export default function MathContent({ children }: { children: string }) {
         components={{
           table: ({ children, ...props }: any) => (
             <div className="w-full overflow-x-auto">
-              <table {...props} className="border-collapse border-2 border-gray-600 my-4 w-full min-w-[300px]">
+              <table {...props} className="border-collapse border-2 border-gray-600 my-4 w-full">
                 {children}
               </table>
             </div>
