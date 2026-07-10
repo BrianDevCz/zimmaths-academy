@@ -93,10 +93,40 @@ export default function MathContent({ children }: { children: string }) {
       }
     );
 
-    // Fix common LaTeX commands that got double-escaped
-    processed = processed.replace(/\\\\(text|frac|sqrt|left|right|cdot|times|div|pm|mp|leq|geq|neq|approx|infty|pi|theta|alpha|beta|Delta|sum|int|prod|lim|log|ln|sin|cos|tan|arcsin|arccos|arctan|begin|end)/g, '\\$1');
+    // Fix common LaTeX commands that got double-escaped.
+    // NOTE: this is intentionally whitelisted to known command names only.
+    // Do NOT replace this with a blanket /\\\\/g -> '\\' regex — that also
+    // strips the \\ row-separator inside matrix/aligned/cases environments
+    // (e.g. \begin{pmatrix}1&2\\3&4\end{pmatrix}) and corrupts matrices.
+    processed = processed.replace(/\\\\(text|frac|dfrac|tfrac|sqrt|left|right|cdot|times|div|pm|mp|leq|geq|neq|approx|infty|equiv|propto|sim|simeq|cong|perp|parallel|angle|triangle|circ|degree|pi|theta|Theta|xi|Xi|mu|nu|lambda|Lambda|sigma|Sigma|phi|Phi|psi|Psi|omega|Omega|gamma|Gamma|delta|Delta|epsilon|varepsilon|zeta|eta|kappa|rho|tau|upsilon|chi|sum|int|iint|oint|prod|coprod|lim|limsup|liminf|log|ln|exp|sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|sinh|cosh|tanh|begin|end|cap|cup|subset|subseteq|supset|supseteq|setminus|emptyset|varnothing|in|notin|ni|forall|exists|nexists|therefore|because|neg|lnot|wedge|vee|oplus|otimes|mapsto|to|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow|Leftrightarrow|longrightarrow|implies|iff|partial|nabla|vec|hat|bar|dot|ddot|overline|underline|overrightarrow|widehat|widetilde|binom|choose|bmod|pmod|cdots|ldots|vdots|ddots|mathbb|mathcal|mathbf|mathrm|boxed)/g, '\\$1');
+
+    // Fix double-escaped LaTeX special characters (\\{ \\} \\$ \\% \\& \\# \\_
+    // -> \{ \} \$ \% \& \# \_). These are escaped punctuation, not command
+    // words, so they need their own pattern separate from the whitelist above.
+    // \$ and \% are especially important: an unescaped $ confuses the
+    // markdown math-delimiter parser, and an unescaped % is a LaTeX comment
+    // character that silently swallows the rest of the line.
+    processed = processed.replace(/\\\\([{}$%&#_])/g, '\\$1');
 
     processed = processed.replace(/\n{3,}/g, '\n\n');
+
+    // Simplify LaTeX digit-grouping braces used only for spacing (e.g. 2{,}000 -> 2,000)
+    processed = processed.replace(/(\d)\{,\}(\d)/g, '$1,$2');
+
+    // De-mathify simple currency amounts, e.g. $\$2,000$ or $$\$2,000$$.
+    // A literal dollar sign for currency and $ as a math delimiter clash:
+    // remark-math scans for the next raw "$" to close a math span and does
+    // NOT respect the backslash in "\$", so it misreads the escaped currency
+    // dollar as the closing delimiter and everything after it spills out as
+    // broken unparsed text. These amounts have no real math content (no
+    // fractions/exponents/variables) so there's nothing lost by rendering
+    // them as plain text instead — pulling them out of math mode entirely
+    // sidesteps the clash. &#36; (not a raw $) so it can never accidentally
+    // pair up with another $ elsewhere in the document.
+    processed = processed.replace(/\${1,2}\\\$(\s*[\d,.\s]+)\${1,2}/g, (_m, amount) => '&#36;' + amount.trim());
+
+    // De-mathify simple percentages, e.g. $8\%$ or $$8\%$$, for the same reason.
+    processed = processed.replace(/\${1,2}(\s*[\d.]+\s*)\\%\${1,2}/g, (_m, num) => num.trim() + '%');
 
     return processed;
   };

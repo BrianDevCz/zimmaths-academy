@@ -105,6 +105,11 @@ export default function AdminPage() {
   const [retagPaperId, setRetagPaperId] = useState("");
   const [retagSyllabus, setRetagSyllabus] = useState("BOTH");
 
+  // ── NEW: Subscription Management State ──────────────────────────
+  const [selectedSubscription, setSelectedSubscription] = useState<any>(null);
+  const [subscriptionActionLoading, setSubscriptionActionLoading] = useState(false);
+  const [subscriptionFilter, setSubscriptionFilter] = useState("all"); // all | active | paused | pending | failed
+
   const getHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("zim_token")}`,
     "Content-Type": "application/json",
@@ -197,9 +202,12 @@ export default function AdminPage() {
     } catch { setError("Failed to load lessons."); }
   };
 
+  // ── UPDATED: Fetch Subscriptions with filtering ──────────────────
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/subscriptions`, { headers: getHeaders() });
+      const params = new URLSearchParams();
+      if (subscriptionFilter !== "all") params.set("status", subscriptionFilter);
+      const res = await fetch(`${API_URL}/api/admin/subscriptions?${params}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setSubscriptions(data.data);
     } catch { setError("Failed to load subscriptions."); }
@@ -251,6 +259,104 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) setWhatsappHistory(data.data);
     } catch {}
+  };
+
+  // ── NEW: Subscription Management Handlers ────────────────────────
+
+  const handlePauseSubscription = async (userId: string) => {
+    if (!confirm("Are you sure you want to pause this subscription? The user will lose premium access until they renew.")) return;
+    setSubscriptionActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/subscriptions/admin/manage`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ userId, action: "pause" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Subscription paused successfully!");
+        fetchSubscriptions();
+        fetchUsers();
+      } else {
+        setFormError(data.error || "Failed to pause subscription");
+      }
+    } catch { setFormError("Failed to pause subscription"); }
+    finally { setSubscriptionActionLoading(false); }
+  };
+
+  const handleResumeSubscription = async (userId: string) => {
+    if (!confirm("Are you sure you want to resume this subscription? The user will regain premium access.")) return;
+    setSubscriptionActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/subscriptions/admin/manage`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ userId, action: "resume" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Subscription resumed successfully!");
+        fetchSubscriptions();
+        fetchUsers();
+      } else {
+        setFormError(data.error || "Failed to resume subscription");
+      }
+    } catch { setFormError("Failed to resume subscription"); }
+    finally { setSubscriptionActionLoading(false); }
+  };
+
+  // ── Updated: Activate Subscription (with plan selection) ────────
+  const handleActivateSubscription = async (userId: string, plan: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/activate`, {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify({ plan })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Subscription activated successfully!");
+        fetchSubscriptions();
+        fetchUsers();
+      } else {
+        setFormError(data.error || "Failed to activate subscription");
+      }
+    } catch { setError("Failed to activate subscription."); }
+  };
+
+  const handleCancelSubscription = async (userId: string) => {
+    if (!confirm("Cancel this subscription? This will set it to expired status.")) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/cancel`, {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Subscription cancelled.");
+        fetchSubscriptions();
+        fetchUsers();
+      }
+    } catch { setFormError("Failed to cancel subscription."); }
+  };
+
+  // ── New: Check and update subscription status ──────────────────
+  const handleCheckSubscription = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/check`, {
+        method: "POST",
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage("Subscription status checked and updated!");
+        fetchSubscriptions();
+        fetchUsers();
+      } else {
+        setFormError(data.error || "Failed to check subscription");
+      }
+    } catch { setFormError("Failed to check subscription."); }
   };
 
   // ── Action handlers ──────────────────────────────────────────
@@ -430,25 +536,20 @@ export default function AdminPage() {
   const handleDeleteQuestion = async (id: string) => { if (!confirm("Delete this question?")) return; try { await fetch(`${API_URL}/api/admin/questions/${id}`, { method: "DELETE", headers: getHeaders() }); if (selectedPaperId) fetchQuestions(selectedPaperId); fetchPracticeQuestions(); } catch { setError("Failed to delete question."); } };
   const handleDeleteLesson = async (id: string) => { if (!confirm("Delete this lesson?")) return; try { await fetch(`${API_URL}/api/admin/lessons/${id}`, { method: "DELETE", headers: getHeaders() }); fetchLessons(); } catch { setError("Failed to delete lesson."); } };
 
-  const handleActivateSubscription = async (userId: string, plan: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/activate`, { method: "PUT", headers: getHeaders(), body: JSON.stringify({ plan }) });
-      const data = await res.json();
-      if (data.success) { setFormMessage("Subscription activated!"); fetchSubscriptions(); fetchUsers(); }
-      else { setFormError(data.error); }
-    } catch { setError("Failed to activate subscription."); }
-  };
-
-  const handleCancelSubscription = async (userId: string) => {
-    if (!confirm("Cancel this subscription?")) return;
-    try { const res = await fetch(`${API_URL}/api/admin/subscriptions/${userId}/cancel`, { method: "PUT", headers: getHeaders(), body: JSON.stringify({}) }); const data = await res.json(); if (data.success) { setFormMessage("Subscription cancelled."); fetchSubscriptions(); fetchUsers(); } }
-    catch { setFormError("Failed to cancel subscription."); }
-  };
-
+  // ── Updated: Delete User with subscription cleanup ──────────────
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!confirm(`Permanently delete "${userName}"? This will delete all their data including points, badges, bookmarks and practice history. This cannot be undone.`)) return;
-    try { const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { method: "DELETE", headers: getHeaders() }); const data = await res.json(); if (data.success) { setFormMessage(`User "${userName}" deleted successfully.`); fetchUsers(userSearch, userPage); } else { setFormError(data.error); } }
-    catch { setFormError("Failed to delete user."); }
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { method: "DELETE", headers: getHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setFormMessage(`User "${userName}" deleted successfully.`);
+        fetchUsers(userSearch, userPage);
+        fetchSubscriptions();
+      } else {
+        setFormError(data.error);
+      }
+    } catch { setFormError("Failed to delete user."); }
   };
 
   const downloadTemplate = () => {
@@ -484,6 +585,19 @@ export default function AdminPage() {
   const SyllabusBadge = ({ value }: { value: string }) => {
     const cls = value === "A" ? "bg-blue-50 text-blue-700" : value === "BOTH" ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-600";
     return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{value || "B"}</span>;
+  };
+
+  // ── NEW: Status Badge for Subscriptions ─────────────────────────
+  const StatusBadge = ({ status }: { status: string }) => {
+    const statusMap: Record<string, { label: string; className: string }> = {
+      active: { label: "Active", className: "bg-green-100 text-green-700" },
+      paused: { label: "⏸️ Paused", className: "bg-yellow-100 text-yellow-700" },
+      pending: { label: "⏳ Pending", className: "bg-blue-100 text-blue-700" },
+      failed: { label: "❌ Failed", className: "bg-red-100 text-red-700" },
+      expired: { label: "⏰ Expired", className: "bg-gray-100 text-gray-500" },
+    };
+    const info = statusMap[status] || { label: status, className: "bg-gray-100 text-gray-600" };
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${info.className}`}>{info.label}</span>;
   };
 
   // ── Solution image display helper ───────────────────────────
@@ -554,7 +668,7 @@ export default function AdminPage() {
         {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">⚠️ {formError}</div>}
 
         {/* ═══════════════════════════════════════════════════════
-            STATS TAB
+            STATS TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "stats" && stats && (
           <div className="space-y-8">
@@ -607,7 +721,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            ANALYTICS TAB
+            ANALYTICS TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "analytics" && (
           <div className="space-y-6">
@@ -632,7 +746,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            DAILY CHALLENGES TAB
+            DAILY CHALLENGES TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "daily" && (
           <div className="space-y-6">
@@ -725,7 +839,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            PAPERS TAB
+            PAPERS TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "papers" && (
           <div className="space-y-6">
@@ -823,7 +937,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            QUESTIONS TAB
+            QUESTIONS TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "questions" && (
           <div className="space-y-6">
@@ -1185,7 +1299,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            LESSONS TAB
+            LESSONS TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "lessons" && (
           <div className="space-y-6">
@@ -1307,7 +1421,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            USERS TAB
+            USERS TAB (updated with subscription status)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
@@ -1328,6 +1442,7 @@ export default function AdminPage() {
                     <th className="text-left py-2 text-gray-500 font-medium">Role</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Syllabus</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Premium</th>
+                    <th className="text-left py-2 text-gray-500 font-medium">Status</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Joined</th>
                     <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
                   </tr>
@@ -1345,11 +1460,31 @@ export default function AdminPage() {
                       <td className="py-3">
                         {u.subscription?.status === "active" ? (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">⭐ {u.subscription.plan}</span>
-                        ) : <span className="text-xs text-gray-400">Free</span>}
+                        ) : u.subscription?.status === "paused" ? (
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold">⏸️ Paused</span>
+                        ) : u.subscription?.status === "pending" ? (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">⏳ Pending</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">Free</span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        {u.subscription?.status === "active" && (
+                          <span className="text-xs text-green-600">Active</span>
+                        )}
+                        {u.subscription?.status === "paused" && (
+                          <span className="text-xs text-yellow-600">Paused</span>
+                        )}
+                        {u.subscription?.status === "pending" && (
+                          <span className="text-xs text-blue-600">Pending</span>
+                        )}
+                        {!u.subscription && (
+                          <span className="text-xs text-gray-400">No sub</span>
+                        )}
                       </td>
                       <td className="py-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
                       <td className="py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1">
                           <select onChange={(e) => { if (e.target.value) handleActivateSubscription(u.id, e.target.value); e.target.value = ""; }}
                             className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600" defaultValue="">
                             <option value="">Activate...</option>
@@ -1357,14 +1492,29 @@ export default function AdminPage() {
                             <option value="monthly">Monthly</option>
                             <option value="annual">Annual</option>
                           </select>
+                          {u.subscription?.status === "active" && (
+                            <button onClick={() => handlePauseSubscription(u.id)} 
+                              className="text-yellow-600 hover:text-yellow-800 text-xs font-semibold whitespace-nowrap">
+                              ⏸️ Pause
+                            </button>
+                          )}
+                          {u.subscription?.status === "paused" && (
+                            <button onClick={() => handleResumeSubscription(u.id)} 
+                              className="text-green-600 hover:text-green-800 text-xs font-semibold whitespace-nowrap">
+                              ▶️ Resume
+                            </button>
+                          )}
                           {u.role !== "admin" && (
-                            <button onClick={() => handleDeleteUser(u.id, u.name)} className="text-red-500 hover:text-red-700 text-xs font-semibold whitespace-nowrap">🗑 Delete</button>
+                            <button onClick={() => handleDeleteUser(u.id, u.name)} 
+                              className="text-red-500 hover:text-red-700 text-xs font-semibold whitespace-nowrap">
+                              🗑 Delete
+                            </button>
                           )}
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {users.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">No users found</td></tr>}
+                  {users.length === 0 && <tr><td colSpan={9} className="py-8 text-center text-gray-400">No users found</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1382,49 +1532,137 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            SUBSCRIPTIONS TAB
+            SUBSCRIPTIONS TAB (UPDATED with management features)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "subscriptions" && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">💳 All Subscriptions ({subscriptions.length})</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 text-gray-500 font-medium">Student</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Email</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Plan</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Status</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Amount</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Expires</th>
-                    <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {subscriptions.map((s: any) => (
-                    <tr key={s.id} className="border-b border-gray-50">
-                      <td className="py-3 font-medium text-gray-800">{s.user?.name}</td>
-                      <td className="py-3 text-gray-500">{s.user?.email}</td>
-                      <td className="py-3 text-gray-500 capitalize">{s.plan?.replace("_", " ")}</td>
-                      <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === "active" ? "bg-green-100 text-green-700" : s.status === "pending" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>{s.status}</span>
-                      </td>
-                      <td className="py-3 text-gray-500">${s.amountUsd}</td>
-                      <td className="py-3 text-gray-500">{new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="py-3">
-                        {s.status === "active" && <button onClick={() => handleCancelSubscription(s.userId)} className="text-red-500 hover:text-red-700 text-xs font-semibold">Cancel</button>}
-                      </td>
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow p-6">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h2 className="text-lg font-bold text-gray-800">💳 Subscriptions ({subscriptions.length})</h2>
+                <div className="flex gap-2">
+                  <select 
+                    value={subscriptionFilter}
+                    onChange={(e) => { setSubscriptionFilter(e.target.value); fetchSubscriptions(); }}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="all">All Subscriptions</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                  <button 
+                    onClick={fetchSubscriptions}
+                    className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 text-gray-500 font-medium">Student</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Email</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Plan</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Status</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Amount</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Started</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Expires</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Actions</th>
                     </tr>
-                  ))}
-                  {subscriptions.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-gray-400">No subscriptions yet</td></tr>}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {subscriptions.map((s: any) => (
+                      <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                        <td className="py-3 font-medium text-gray-800">{s.user?.name || 'Unknown'}</td>
+                        <td className="py-3 text-gray-500">{s.user?.email || 'No email'}</td>
+                        <td className="py-3 text-gray-500 capitalize">{s.plan?.replace("_", " ")}</td>
+                        <td className="py-3"><StatusBadge status={s.status} /></td>
+                        <td className="py-3 text-gray-500">${s.amountUsd?.toFixed(2) || '0.00'}</td>
+                        <td className="py-3 text-gray-500">{new Date(s.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
+                        <td className="py-3 text-gray-500">
+                          {new Date(s.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {s.pausedAt && (
+                            <div className="text-xs text-yellow-600 mt-1">
+                              Paused: {new Date(s.pausedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                          {s.gracePeriodEndedAt && (
+                            <div className="text-xs text-orange-600 mt-1">
+                              Grace ended: {new Date(s.gracePeriodEndedAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {s.status === "active" && (
+                              <>
+                                <button 
+                                  onClick={() => handlePauseSubscription(s.userId)}
+                                  disabled={subscriptionActionLoading}
+                                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-semibold transition disabled:opacity-50"
+                                >
+                                  ⏸️ Pause
+                                </button>
+                                <button 
+                                  onClick={() => handleCancelSubscription(s.userId)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-semibold"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            )}
+                            {s.status === "paused" && (
+                              <button 
+                                onClick={() => handleResumeSubscription(s.userId)}
+                                disabled={subscriptionActionLoading}
+                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-semibold transition disabled:opacity-50"
+                              >
+                                ▶️ Resume
+                              </button>
+                            )}
+                            {(s.status === "pending" || s.status === "failed" || s.status === "expired") && (
+                              <button 
+                                onClick={() => handleCheckSubscription(s.userId)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold transition"
+                              >
+                                🔄 Check
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {subscriptions.length === 0 && (
+                      <tr><td colSpan={8} className="py-8 text-center text-gray-400">No subscriptions found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ── Subscription Stats ───────────────────────────── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: "Active", count: subscriptions.filter((s: any) => s.status === "active").length, color: "text-green-600" },
+                { label: "Paused", count: subscriptions.filter((s: any) => s.status === "paused").length, color: "text-yellow-600" },
+                { label: "Pending", count: subscriptions.filter((s: any) => s.status === "pending").length, color: "text-blue-600" },
+                { label: "Failed/Expired", count: subscriptions.filter((s: any) => s.status === "failed" || s.status === "expired").length, color: "text-red-600" },
+              ].map((stat) => (
+                <div key={stat.label} className="bg-white rounded-2xl border border-gray-200 shadow p-4 text-center">
+                  <p className={`text-2xl font-bold ${stat.color}`}>{stat.count}</p>
+                  <p className="text-xs text-gray-500">{stat.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            BADGES TAB
+            BADGES TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "badges" && (
           <div className="space-y-6">
@@ -1472,7 +1710,7 @@ export default function AdminPage() {
         )}
 
         {/* ═══════════════════════════════════════════════════════
-            WHATSAPP TAB
+            WHATSAPP TAB (unchanged)
             ═══════════════════════════════════════════════════════ */}
         {activeTab === "whatsapp" && (
           <div className="space-y-6">
